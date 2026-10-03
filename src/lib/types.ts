@@ -10,8 +10,9 @@ export type TaskStatus = "todo" | "in_progress" | "done";
 /** Convenience union for task priority (DB column is free-form TEXT). */
 export type TaskPriority = "low" | "medium" | "high";
 
-/** Theme identifier persisted in settings. */
-export type Theme = "dark" | "light";
+/** Theme preset persisted in settings. `dark`/`light` = default palettes;
+ *  `slate`/`nord`/`sepia` are named presets (Wave 5). */
+export type Theme = "dark" | "light" | "slate" | "nord" | "sepia";
 
 // ---------------------------------------------------------------------------
 // Security (security.rs)
@@ -171,6 +172,8 @@ export interface Settings {
   fontSize: number;
   autoLockMin: number;
   clipboardClearSec: number;
+  /** Wave 5 — tampilkan ikon situs (favicon) di daftar vault. */
+  showIcons: boolean;
 }
 
 /** `update_settings` payload (partial merge of the settings fields). */

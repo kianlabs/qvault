@@ -77,11 +77,15 @@ function Shell() {
   // Auto-lock aktif hanya saat vault terbuka.
   useAutoLock(!locked && autoLockMin > 0, autoLockMin);
 
-  // apply theme + font size to <html>
+  // apply theme preset + font size + accent to <html>
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.toggle("light", theme === "light");
-    root.classList.toggle("dark", theme !== "light");
+    const presets = ["light", "dark", "slate", "nord", "sepia"];
+    // Hapus semua kelas preset, lalu pasang yang aktif.
+    presets.forEach((p) => root.classList.remove(p));
+    root.classList.add(theme);
+    // Preset keluarga gelap juga mengaktifkan varian `dark` Tailwind.
+    if (theme === "slate" || theme === "nord") root.classList.add("dark");
     root.style.fontSize = `${fontSize}px`;
     root.style.setProperty("--accent", accent);
   }, [theme, fontSize, accent]);

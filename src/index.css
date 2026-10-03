@@ -36,6 +36,40 @@ html.light {
   color-scheme: light;
 }
 
+/* Wave 5 — named theme presets (dark-family). */
+html.slate {
+  --surface: #0f172a;
+  --elevated: #1e293b;
+  --line: #334155;
+  --ink: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #38bdf8;
+  --accent-soft: rgba(56, 189, 248, 0.14);
+  color-scheme: dark;
+}
+
+html.nord {
+  --surface: #2e3440;
+  --elevated: #3b4252;
+  --line: #4c566a;
+  --ink: #eceff4;
+  --muted: #aebacf;
+  --accent: #88c0d0;
+  --accent-soft: rgba(136, 192, 208, 0.16);
+  color-scheme: dark;
+}
+
+html.sepia {
+  --surface: #f4ecd8;
+  --elevated: #fbf5e6;
+  --line: #e0d3b8;
+  --ink: #3b3325;
+  --muted: #7a6c50;
+  --accent: #b45309;
+  --accent-soft: rgba(180, 83, 9, 0.12);
+  color-scheme: light;
+}
+
 html,
 body,
 #root {

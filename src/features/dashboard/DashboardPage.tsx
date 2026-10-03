@@ -1,7 +1,7 @@
 // QVAULT — Dashboard (route "/"). Read-only overview built from Wave-1 stores:
 // useTasksStore (dashboard_stats), useIncomeStore (income_summary), useActivityStore.
 // Wave 3 (Agent C): World clock, Vault protection, Recent credentials.
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
@@ -12,6 +12,8 @@ import {
   KeyRound,
   ListChecks,
   Lock,
+  Maximize2,
+  Minimize2,
   NotebookPen,
   ShieldCheck,
   TrendingUp,
@@ -31,6 +33,7 @@ import {
 } from "../../lib/utils";
 import EmptyState from "../../components/EmptyState";
 import WorldClock from "../../components/WorldClock";
+import { exitFullscreen, isFullscreen, toggleFullscreen } from "../../lib/fullscreen";
 import type { LucideIcon } from "lucide-react";
 
 interface Tile {
@@ -61,6 +64,22 @@ export default function DashboardPage() {
   const loadVault = useVaultStore((s) => s.load);
   const initialized = useAuthStore((s) => s.initialized);
   const locked = useAuthStore((s) => s.locked);
+
+  // Full screen mode (WAVE5 §F.2): state lokal + sinkron saat mount.
+  const [fs, setFs] = useState(false);
+  useEffect(() => {
+    void isFullscreen().then(setFs);
+  }, []);
+
+  // Escape keluar dari fullscreen — cuma dipasang saat fullscreen aktif.
+  useEffect(() => {
+    if (!fs) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") void exitFullscreen().then(() => setFs(false));
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fs]);
 
   useEffect(() => {
     void loadStats();
@@ -143,13 +162,24 @@ export default function DashboardPage() {
             Everything at a glance — vault, notes, tasks and income.
           </p>
         </div>
-        <Link
-          to="/generator"
-          className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-        >
-          Generate password
-          <ArrowRight className="h-4 w-4" />
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={async () => setFs(await toggleFullscreen())}
+            title={fs ? "Exit full screen" : "Full screen"}
+            aria-label={fs ? "Exit full screen" : "Full screen"}
+            className="grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-white/5 hover:text-ink"
+          >
+            {fs ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </button>
+          <Link
+            to="/generator"
+            className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+          >
+            Generate password
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
       </header>
 
       <section className="grid grid-cols-2 gap-4 md:grid-cols-3">

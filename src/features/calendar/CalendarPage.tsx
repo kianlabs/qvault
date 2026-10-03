@@ -6,6 +6,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Maximize2,
+  Minimize2,
   Plus,
   RefreshCw,
 } from "lucide-react";
@@ -15,6 +17,7 @@ import Modal from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { useFoldersStore } from "../../store/useFoldersStore";
 import { useTasksStore } from "../../store/useTasksStore";
+import { exitFullscreen, isFullscreen, toggleFullscreen } from "../../lib/fullscreen";
 import type { Task, TaskPayload, TaskStatus } from "../../lib/types";
 import { cn, parseTags } from "../../lib/utils";
 
@@ -153,6 +156,22 @@ export default function CalendarPage() {
     void loadFolders();
   }, [load, loadFolders]);
 
+  // Full screen mode (WAVE5 §F.2): state lokal + sinkron saat mount.
+  const [fs, setFs] = useState(false);
+  useEffect(() => {
+    void isFullscreen().then(setFs);
+  }, []);
+
+  // Escape keluar dari fullscreen — cuma dipasang saat fullscreen aktif.
+  useEffect(() => {
+    if (!fs) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") void exitFullscreen().then(() => setFs(false));
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fs]);
+
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
 
@@ -283,6 +302,15 @@ export default function CalendarPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={async () => setFs(await toggleFullscreen())}
+            title={fs ? "Exit full screen" : "Full screen"}
+            aria-label={fs ? "Exit full screen" : "Full screen"}
+            className="grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-white/5 hover:text-ink"
+          >
+            {fs ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </button>
           <button
             type="button"
             onClick={() => void load()}

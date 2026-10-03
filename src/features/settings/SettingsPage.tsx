@@ -14,13 +14,11 @@ import {
   Info,
   KeyRound,
   Loader2,
-  Moon,
   Palette,
   Plus,
   RefreshCw,
   Save,
   ShieldCheck,
-  Sun,
   Trash2,
   Upload,
   User,
@@ -37,6 +35,15 @@ import { cn, errorMessage } from "../../lib/utils";
 import type { BrowserKind, CsvKind, Theme } from "../../lib/types";
 
 const ACCENTS = ["#7c5cff", "#22d3ee", "#34d399", "#f472b6", "#f59e0b"];
+
+/** Wave 5 — preset tema bernama + warna swatch untuk preview. */
+const THEMES: { id: Theme; label: string; swatch: string }[] = [
+  { id: "dark", label: "Dark", swatch: "#0e1015" },
+  { id: "light", label: "Light", swatch: "#f6f7fb" },
+  { id: "slate", label: "Dark · Slate", swatch: "#0f172a" },
+  { id: "nord", label: "Dark · Nord", swatch: "#2e3440" },
+  { id: "sepia", label: "Light · Sepia", swatch: "#f4ecd8" },
+];
 
 const CSV_KINDS: { value: CsvKind; label: string }[] = [
   { value: "vault", label: "Vault" },
@@ -67,6 +74,8 @@ export default function SettingsPage() {
   const [theme, setTheme] = useState<Theme>("dark");
   const [accent, setAccent] = useState("#7c5cff");
   const [fontSize, setFontSize] = useState(16);
+  // Wave 5 — tampilkan favicon situs di daftar vault (default true).
+  const [showIcons, setShowIcons] = useState(true);
   const [autoLockMin, setAutoLockMin] = useState(15);
   const [clipboardClearSec, setClipboardClearSec] = useState(30);
   const [saving, setSaving] = useState(false);
@@ -109,6 +118,7 @@ export default function SettingsPage() {
     setTheme(settings.theme);
     setAccent(settings.accent);
     setFontSize(settings.fontSize);
+    setShowIcons(settings.showIcons);
     setAutoLockMin(settings.autoLockMin);
     setClipboardClearSec(settings.clipboardClearSec);
   }, [settings]);
@@ -370,25 +380,25 @@ export default function SettingsPage() {
       {/* Appearance */}
       <Section icon={Palette} title="Appearance">
         <Field label="Theme">
-          <div className="flex gap-2">
-            {(["dark", "light"] as Theme[]).map((t) => (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {THEMES.map((t) => (
               <button
-                key={t}
+                key={t.id}
                 type="button"
-                onClick={() => setTheme(t)}
+                onClick={() => setTheme(t.id)}
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm capitalize transition",
-                  theme === t
+                  "flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm transition",
+                  theme === t.id
                     ? "border-accent bg-accent-soft text-ink"
                     : "border-line text-muted hover:text-ink",
                 )}
               >
-                {t === "dark" ? (
-                  <Moon className="h-4 w-4" />
-                ) : (
-                  <Sun className="h-4 w-4" />
-                )}
-                {t}
+                <span
+                  aria-hidden
+                  className="h-5 w-5 shrink-0 rounded-md border border-line"
+                  style={{ backgroundColor: t.swatch }}
+                />
+                <span className="truncate">{t.label}</span>
               </button>
             ))}
           </div>
@@ -431,10 +441,41 @@ export default function SettingsPage() {
           />
         </Field>
 
+        {/* Wave 5 — toggle ikon situs (favicon) di daftar vault. */}
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-ink">Website icons</p>
+            <p className="text-xs text-muted">
+              Show each site&apos;s favicon in the vault list.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={showIcons}
+            aria-label="Show website icons"
+            onClick={() => setShowIcons((v) => !v)}
+            className={cn(
+              "relative h-6 w-11 shrink-0 rounded-full border transition",
+              showIcons ? "border-accent bg-accent" : "border-line bg-surface",
+            )}
+          >
+            <span
+              className={cn(
+                "absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all",
+                showIcons ? "left-[22px]" : "left-0.5",
+              )}
+            />
+          </button>
+        </div>
+
         <SaveButton
           saving={saving}
           onClick={() =>
-            persist({ theme, accent, fontSize }, "Appearance saved")
+            persist(
+              { theme, accent, fontSize, showIcons },
+              "Appearance saved",
+            )
           }
         />
       </Section>

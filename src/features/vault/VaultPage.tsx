@@ -70,19 +70,23 @@ const EMPTY_FORM: VaultItemPayload = {
 /**
  * Avatar item vault: pakai `icon` bila ada, lalu favicon situs, lalu inisial.
  * `onIconError` dipanggil saat <img> gagal → parent menandai URL rusak.
+ * Wave 5 — saat `showIcons` false, lewati ikon/favicon: langsung inisial.
  */
 function VaultAvatar({
   item,
   size = "md",
   broken = false,
+  showIcons = true,
   onIconError,
 }: {
   item: VaultItem;
   size?: "md" | "lg";
   broken?: boolean;
+  showIcons?: boolean;
   onIconError?: () => void;
 }) {
-  const src = broken ? null : item.icon || faviconUrl(item.url);
+  const src =
+    !showIcons || broken ? null : item.icon || faviconUrl(item.url);
   const box = size === "lg" ? "h-12 w-12 rounded-2xl" : "h-10 w-10 rounded-xl";
   if (src) {
     return (
@@ -131,6 +135,8 @@ export default function VaultPage() {
   // Wave 4 — durasi auto-clear clipboard dari settings (fallback 30s).
   const clipboardClearSec =
     useSettingsStore((s) => s.settings?.clipboardClearSec) ?? 30;
+  // Wave 5 — tampilkan favicon situs di avatar daftar (fallback true).
+  const showIcons = useSettingsStore((s) => s.settings?.showIcons ?? true);
 
   const [search, setSearch] = useState("");
   const [folderId, setFolderId] = useState("");
@@ -413,6 +419,7 @@ export default function VaultPage() {
                   <VaultAvatar
                     item={item}
                     size="lg"
+                    showIcons={showIcons}
                     broken={brokenIcons[item.id]}
                     onIconError={() =>
                       setBrokenIcons((b) => ({ ...b, [item.id]: true }))
@@ -518,6 +525,7 @@ export default function VaultPage() {
               >
                 <VaultAvatar
                   item={item}
+                  showIcons={showIcons}
                   broken={brokenIcons[item.id]}
                   onIconError={() =>
                     setBrokenIcons((b) => ({ ...b, [item.id]: true }))

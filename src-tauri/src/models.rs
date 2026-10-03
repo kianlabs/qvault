@@ -188,6 +188,8 @@ pub struct SettingsPayload {
     pub font_size: Option<i64>,
     pub auto_lock_min: Option<i64>,
     pub clipboard_clear_sec: Option<i64>,
+    /// Wave 5 — toggle ikon situs.
+    pub show_icons: Option<bool>,
 }
 
 // ===========================================================================
@@ -213,6 +215,8 @@ pub struct Settings {
     pub font_size: i64,
     pub auto_lock_min: i64,
     pub clipboard_clear_sec: i64,
+    /// Wave 5 — tampilkan ikon situs (favicon) di daftar vault.
+    pub show_icons: bool,
 }
 
 /// Statistik dashboard (`dashboard_stats`).

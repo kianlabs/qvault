@@ -23,6 +23,7 @@ pub fn get_settings(state: State<'_, AppState>) -> Result<Settings> {
         let font_size = parse_i64(get_setting(conn, "font_size")?).unwrap_or(14);
         let auto_lock_min = parse_i64(get_setting(conn, "auto_lock_min")?).unwrap_or(15);
         let clipboard_clear_sec = parse_i64(get_setting(conn, "clipboard_clear_sec")?).unwrap_or(30);
+        let show_icons = get_setting(conn, "show_icons")?.map(|s| s != "0" && s != "false").unwrap_or(true);
 
         Ok(Settings {
             display_name,
@@ -32,6 +33,7 @@ pub fn get_settings(state: State<'_, AppState>) -> Result<Settings> {
             font_size,
             auto_lock_min,
             clipboard_clear_sec,
+            show_icons,
         })
     })
 }
@@ -60,6 +62,9 @@ pub fn update_settings(state: State<'_, AppState>, payload: SettingsPayload) -> 
         }
         if let Some(v) = payload.clipboard_clear_sec {
             set_setting(conn, "clipboard_clear_sec", &v.to_string())?;
+        }
+        if let Some(v) = payload.show_icons {
+            set_setting(conn, "show_icons", if v { "1" } else { "0" })?;
         }
         log_activity(conn, "settings", "update", None)?;
         Ok(())
