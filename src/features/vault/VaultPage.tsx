@@ -1,17 +1,15 @@
-// QVAULT — Vault (passwords) page. Uses useVaultStore + shared UI (FINAL-CONTRACT B/C/D).
+// QVAULT — Vault (passwords) page. Uses useVaultStore + Calm Precision UI.
+// Lapisan tampilan saja: seluruh state/handler/store dipertahankan identik.
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   Copy,
   Eye,
   EyeOff,
   KeyRound,
-  LayoutGrid,
-  List,
   Loader2,
   Pencil,
   Plus,
   RefreshCw,
-  Search,
   Star,
   Trash2,
 } from "lucide-react";
@@ -21,6 +19,20 @@ import Modal from "../../components/Modal";
 import PasswordStrength from "../../components/PasswordStrength";
 import TotpField from "../../components/TotpField";
 import { useToast } from "../../components/Toast";
+import {
+  Button,
+  Card,
+  Field,
+  IconButton,
+  Input,
+  Menu,
+  PageHeader,
+  RowActions,
+  SearchInput,
+  Tabs,
+  Toggle,
+  type MenuItem,
+} from "../../components/ui";
 import { secureCopy } from "../../lib/clipboard";
 import { useFoldersStore } from "../../store/useFoldersStore";
 import { useSettingsStore } from "../../store/useSettingsStore";
@@ -47,12 +59,6 @@ function readView(): ViewMode {
     return "list";
   }
 }
-
-const inputCls =
-  "w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none transition focus:border-accent";
-const labelCls = "mb-1 block text-xs font-medium text-muted";
-const iconBtnCls =
-  "grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-white/5 hover:text-ink";
 
 const EMPTY_FORM: VaultItemPayload = {
   title: "",
@@ -85,8 +91,7 @@ function VaultAvatar({
   showIcons?: boolean;
   onIconError?: () => void;
 }) {
-  const src =
-    !showIcons || broken ? null : item.icon || faviconUrl(item.url);
+  const src = !showIcons || broken ? null : item.icon || faviconUrl(item.url);
   const box = size === "lg" ? "h-12 w-12 rounded-2xl" : "h-10 w-10 rounded-xl";
   if (src) {
     return (
@@ -300,49 +305,75 @@ export default function VaultPage() {
     }
   }
 
+  /** Aksi sekunder per baris (ikon soup dipindah ke menu "⋯"). */
+  function rowMenu(item: VaultItem, shown: string | undefined): MenuItem[] {
+    const base: MenuItem[] = [
+      {
+        label: shown ? "Hide password" : "Reveal password",
+        icon: shown ? EyeOff : Eye,
+        onClick: () => void onReveal(item),
+      },
+    ];
+    if (item.username) {
+      base.push({
+        label: "Copy username",
+        icon: Copy,
+        onClick: () => void onCopyUsername(item),
+      });
+    }
+    base.push(
+      {
+        label: item.favorite ? "Remove from favorites" : "Add to favorites",
+        icon: Star,
+        onClick: () => void onToggleFavorite(item),
+      },
+      { label: "Edit", icon: Pencil, onClick: () => openEdit(item) },
+      {
+        label: "Delete",
+        icon: busyId === item.id ? Loader2 : Trash2,
+        onClick: () => void onDelete(item),
+        danger: true,
+        disabled: busyId === item.id,
+      },
+    );
+    return base;
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-ink">Vault</h1>
-          <p className="text-xs text-muted">
-            {filtered.length} of {items.length} item
-            {items.length === 1 ? "" : "s"}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void load()}
-            className={iconBtnCls}
-            aria-label="Refresh"
-          >
-            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-          </button>
-          <button
-            type="button"
-            onClick={openCreate}
-            className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-          >
-            <Plus className="h-4 w-4" /> Add item
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Vault"
+        subtitle={`${filtered.length} of ${items.length} item${
+          items.length === 1 ? "" : "s"
+        }`}
+        actions={
+          <>
+            <IconButton
+              icon={RefreshCw}
+              label="Refresh"
+              onClick={() => void load()}
+              disabled={loading}
+            />
+            <Button variant="primary" icon={Plus} onClick={openCreate}>
+              New item
+            </Button>
+          </>
+        }
+      />
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-          <input
+        <div className="min-w-[220px] flex-1">
+          <SearchInput
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search vault…"
-            className="w-full rounded-xl border border-line bg-surface py-2.5 pl-9 pr-3 text-sm text-ink outline-none transition focus:border-accent"
           />
         </div>
         <select
           value={folderId}
           onChange={(e) => setFolderId(e.target.value)}
-          className="rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none transition focus:border-accent"
+          className="field w-auto"
+          aria-label="Filter by folder"
         >
           <option value="">All folders</option>
           {usableFolders.map((f) => (
@@ -351,49 +382,27 @@ export default function VaultPage() {
             </option>
           ))}
         </select>
-        <button
-          type="button"
+        <Button
+          variant={favoriteOnly ? "primary" : "secondary"}
+          icon={Star}
           onClick={() => setFavoriteOnly((v) => !v)}
-          className={cn(
-            "flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm transition",
-            favoriteOnly
-              ? "border-accent bg-accent-soft text-ink"
-              : "border-line text-muted hover:text-ink",
-          )}
         >
-          <Star className={cn("h-4 w-4", favoriteOnly && "fill-current")} />
           Favorites
-        </button>
-        <div className="flex gap-1 rounded-xl border border-line bg-surface p-1">
-          <button
-            type="button"
-            onClick={() => changeView("grid")}
-            className={cn(
-              "grid h-8 w-8 place-items-center rounded-lg transition",
-              view === "grid" ? "bg-accent text-white" : "text-muted hover:text-ink",
-            )}
-            aria-label="Grid view"
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => changeView("list")}
-            className={cn(
-              "grid h-8 w-8 place-items-center rounded-lg transition",
-              view === "list" ? "bg-accent text-white" : "text-muted hover:text-ink",
-            )}
-            aria-label="List view"
-          >
-            <List className="h-4 w-4" />
-          </button>
-        </div>
+        </Button>
+        <Tabs
+          items={[
+            { value: "grid", label: "Grid" },
+            { value: "list", label: "List" },
+          ]}
+          value={view}
+          onChange={(v) => changeView(v as ViewMode)}
+        />
       </div>
 
       {error && (
-        <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-xs text-red-300">
+        <div className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-2 text-xs text-danger">
           {error}
-        </p>
+        </div>
       )}
 
       {loading && items.length === 0 ? (
@@ -405,15 +414,21 @@ export default function VaultPage() {
           icon={KeyRound}
           title="No vault items"
           hint="Add a password to start securing your credentials."
+          action={
+            <Button variant="primary" icon={Plus} onClick={openCreate}>
+              New item
+            </Button>
+          }
         />
       ) : view === "grid" ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((item) => {
             const shown = revealed[item.id];
             return (
-              <article
+              <Card
                 key={item.id}
-                className="flex flex-col gap-3 rounded-2xl border border-line bg-elevated p-4"
+                padding="md"
+                className="group flex flex-col gap-3"
               >
                 <div className="flex items-start gap-3">
                   <VaultAvatar
@@ -431,7 +446,10 @@ export default function VaultPage() {
                         {item.title}
                       </h3>
                       {item.favorite && (
-                        <Star className="h-3.5 w-3.5 shrink-0 fill-current text-amber-400" />
+                        <Star
+                          className="h-3.5 w-3.5 shrink-0 fill-current text-warn"
+                          aria-hidden
+                        />
                       )}
                     </div>
                     <p className="truncate text-xs text-muted">
@@ -454,74 +472,27 @@ export default function VaultPage() {
                   <span className="text-[11px] text-muted">
                     {formatDate(item.updatedAt)}
                   </span>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => void onReveal(item)}
-                      className={iconBtnCls}
-                      aria-label={shown ? "Hide password" : "Reveal password"}
-                    >
-                      {shown ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </button>
-                    <button
-                      type="button"
+                  <RowActions>
+                    <IconButton
+                      icon={KeyRound}
+                      label="Copy password"
                       onClick={() => void onCopyPassword(item)}
-                      className={iconBtnCls}
-                      aria-label="Copy password"
-                    >
-                      <Copy className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void onToggleFavorite(item)}
-                      className={iconBtnCls}
-                      aria-label="Toggle favorite"
-                    >
-                      <Star
-                        className={cn(
-                          "h-4 w-4",
-                          item.favorite && "fill-current text-amber-400",
-                        )}
-                      />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openEdit(item)}
-                      className={iconBtnCls}
-                      aria-label="Edit"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void onDelete(item)}
-                      className={cn(iconBtnCls, "hover:text-red-400")}
-                      aria-label="Delete"
-                    >
-                      {busyId === item.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
+                    />
+                    <Menu items={rowMenu(item, shown)} label="Item actions" />
+                  </RowActions>
                 </div>
-              </article>
+              </Card>
             );
           })}
         </div>
       ) : (
-        <ul className="space-y-2">
+        <Card padding="none" className="overflow-hidden">
           {filtered.map((item) => {
             const shown = revealed[item.id];
             return (
-              <li
+              <div
                 key={item.id}
-                className="flex items-center gap-4 rounded-2xl border border-line bg-elevated px-4 py-3"
+                className="group flex items-center gap-3 border-b border-line px-4 py-2.5 transition-colors last:border-0 hover:bg-raised"
               >
                 <VaultAvatar
                   item={item}
@@ -538,7 +509,10 @@ export default function VaultPage() {
                       {item.title}
                     </p>
                     {item.favorite && (
-                      <Star className="h-3.5 w-3.5 shrink-0 fill-current text-amber-400" />
+                      <Star
+                        className="h-3.5 w-3.5 shrink-0 fill-current text-warn"
+                        aria-hidden
+                      />
                     )}
                   </div>
                   <p className="truncate text-xs text-muted">
@@ -551,81 +525,26 @@ export default function VaultPage() {
                 </div>
 
                 <div className="hidden shrink-0 text-right md:block">
-                  <p className="text-xs text-muted">{formatDate(item.updatedAt)}</p>
+                  <p className="text-xs text-muted">
+                    {formatDate(item.updatedAt)}
+                  </p>
                   <p className="font-mono text-xs text-ink">
                     {shown ? shown : "••••••••"}
                   </p>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => void onReveal(item)}
-                    className={iconBtnCls}
-                    aria-label={shown ? "Hide password" : "Reveal password"}
-                  >
-                    {shown ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
-                  {item.username && (
-                    <button
-                      type="button"
-                      onClick={() => void onCopyUsername(item)}
-                      className={iconBtnCls}
-                      aria-label="Copy username"
-                    >
-                      <Copy className="h-4 w-4" />
-                    </button>
-                  )}
-                  <button
-                    type="button"
+                <RowActions>
+                  <IconButton
+                    icon={KeyRound}
+                    label="Copy password"
                     onClick={() => void onCopyPassword(item)}
-                    className={iconBtnCls}
-                    aria-label="Copy password"
-                  >
-                    <KeyRound className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void onToggleFavorite(item)}
-                    className={iconBtnCls}
-                    aria-label="Toggle favorite"
-                  >
-                    <Star
-                      className={cn(
-                        "h-4 w-4",
-                        item.favorite && "fill-current text-amber-400",
-                      )}
-                    />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openEdit(item)}
-                    className={iconBtnCls}
-                    aria-label="Edit"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void onDelete(item)}
-                    className={cn(iconBtnCls, "hover:text-red-400")}
-                    aria-label="Delete"
-                  >
-                    {busyId === item.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-              </li>
+                  />
+                  <Menu items={rowMenu(item, shown)} label="Item actions" />
+                </RowActions>
+              </div>
             );
           })}
-        </ul>
+        </Card>
       )}
 
       <Modal
@@ -634,80 +553,69 @@ export default function VaultPage() {
         title={editing ? "Edit item" : "New item"}
       >
         <form onSubmit={onSubmit} className="space-y-3">
-          <div>
-            <label className={labelCls}>Title</label>
-            <input
+          <Field label="Title">
+            <Input
               value={form.title}
               onChange={(e) =>
                 setForm((f) => ({ ...f, title: e.target.value }))
               }
-              className={inputCls}
               placeholder="e.g. GitHub"
             />
-          </div>
+          </Field>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Username</label>
-              <input
+            <Field label="Username">
+              <Input
                 value={form.username}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, username: e.target.value }))
                 }
-                className={inputCls}
                 placeholder="you@example.com"
               />
-            </div>
-            <div>
-              <label className={labelCls}>URL</label>
-              <input
+            </Field>
+            <Field label="URL">
+              <Input
                 value={form.url}
                 onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
-                className={inputCls}
                 placeholder="https://…"
               />
-            </div>
+            </Field>
           </div>
 
-          <div>
-            <label className={labelCls}>Password</label>
+          <Field label="Password">
             <div className="flex gap-2">
-              <input
+              <Input
                 type="text"
                 value={form.password}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, password: e.target.value }))
                 }
-                className={cn(inputCls, "flex-1 font-mono")}
+                className="flex-1 font-mono"
                 placeholder="••••••••"
               />
-              <button
-                type="button"
+              <Button
+                variant="secondary"
                 onClick={() =>
                   setForm((f) => ({
                     ...f,
                     password: generatePassword({ length: 20 }),
                   }))
                 }
-                className="rounded-xl border border-line px-3 text-xs text-muted transition hover:text-ink"
               >
                 Generate
-              </button>
+              </Button>
             </div>
-            <div className="mt-2">
-              <PasswordStrength password={form.password} />
-            </div>
-          </div>
+          </Field>
+          <PasswordStrength password={form.password} />
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Folder</label>
+            <Field label="Folder">
               <select
                 value={form.folderId ?? ""}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, folderId: e.target.value || null }))
                 }
-                className={inputCls}
+                className="field"
               >
                 <option value="">No folder</option>
                 {usableFolders.map((f) => (
@@ -716,30 +624,27 @@ export default function VaultPage() {
                   </option>
                 ))}
               </select>
-            </div>
-            <div>
-              <label className={labelCls}>Tags (comma separated)</label>
-              <input
+            </Field>
+            <Field label="Tags (comma separated)">
+              <Input
                 value={tagsText}
                 onChange={(e) => setTagsText(e.target.value)}
-                className={inputCls}
                 placeholder="work, personal"
               />
-            </div>
+            </Field>
           </div>
 
-          <div>
-            <label className={labelCls}>Notes</label>
+          <Field label="Notes">
             <textarea
               value={form.notes}
               onChange={(e) =>
                 setForm((f) => ({ ...f, notes: e.target.value }))
               }
               rows={3}
-              className={inputCls}
+              className="field"
               placeholder="Optional notes…"
             />
-          </div>
+          </Field>
 
           {/* 2FA hanya tampil untuk item yang sudah tersimpan (punya id). */}
           {editing && (
@@ -750,33 +655,27 @@ export default function VaultPage() {
             />
           )}
 
-          <label className="flex items-center gap-2 text-sm text-ink">
-            <input
-              type="checkbox"
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-ink">Mark as favorite</span>
+            <Toggle
               checked={form.favorite}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, favorite: e.target.checked }))
-              }
+              onChange={(v) => setForm((f) => ({ ...f, favorite: v }))}
+              label="Mark as favorite"
             />
-            Mark as favorite
-          </label>
+          </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="rounded-xl border border-line px-4 py-2 text-sm text-muted transition hover:text-ink"
-            >
+            <Button variant="secondary" onClick={() => setOpen(false)}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
+              variant="primary"
               disabled={saving}
-              className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+              icon={saving ? Loader2 : undefined}
             >
-              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               {editing ? "Save changes" : "Add item"}
-            </button>
+            </Button>
           </div>
         </form>
       </Modal>

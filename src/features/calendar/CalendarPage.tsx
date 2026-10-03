@@ -1,5 +1,6 @@
 // QVAULT — Calendar page. Month / Week / Year views over useTasksStore (dueDate) +
 // "add task from date" modal (Wave 3, Agent C). Shared UI from FINAL-CONTRACT B/C/D.
+// Redesigned to the "Calm Precision" design system (UI-OVERHAUL-CONTRACT) — presentation only.
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   CalendarDays,
@@ -15,6 +16,16 @@ import {
 import EmptyState from "../../components/EmptyState";
 import Modal from "../../components/Modal";
 import { useToast } from "../../components/Toast";
+import {
+  Badge,
+  Button,
+  Card,
+  Field,
+  IconButton,
+  Input,
+  PageHeader,
+  Tabs,
+} from "../../components/ui";
 import { useFoldersStore } from "../../store/useFoldersStore";
 import { useTasksStore } from "../../store/useTasksStore";
 import { exitFullscreen, isFullscreen, toggleFullscreen } from "../../lib/fullscreen";
@@ -52,10 +63,6 @@ const MONTHS_SHORT = [
   "Nov",
   "Dec",
 ];
-
-const inputCls =
-  "w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none transition focus:border-accent";
-const labelCls = "mb-1 block text-xs font-medium text-muted";
 
 const EMPTY_FORM: TaskPayload = {
   title: "",
@@ -124,15 +131,11 @@ function weekLabel(start: Date): string {
   return `${s} – ${e}`;
 }
 
-function statusClass(status: string): string {
-  switch (status) {
-    case "done":
-      return "border-emerald-500/40 bg-emerald-500/20 text-emerald-300";
-    case "in_progress":
-      return "border-amber-500/40 bg-amber-500/20 text-amber-300";
-    default:
-      return "border-accent/40 bg-accent-soft text-ink";
-  }
+/** Satu warna = satu makna (Calm Precision). */
+function statusTone(status: string): "success" | "warn" | "accent" {
+  if (status === "done") return "success";
+  if (status === "in_progress") return "warn";
+  return "accent";
 }
 
 export default function CalendarPage() {
@@ -293,90 +296,67 @@ export default function CalendarPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-ink">Calendar</h1>
-          <p className="text-xs text-muted">
-            {headerCount} task{headerCount === 1 ? "" : "s"} {headerUnit}
-          </p>
-        </div>
+      <PageHeader
+        title="Calendar"
+        subtitle={`${headerCount} task${headerCount === 1 ? "" : "s"} ${headerUnit}`}
+        actions={
+          <>
+            <IconButton
+              icon={fs ? Minimize2 : Maximize2}
+              label={fs ? "Exit full screen" : "Full screen"}
+              onClick={async () => setFs(await toggleFullscreen())}
+            />
+            <IconButton
+              icon={RefreshCw}
+              label="Refresh"
+              onClick={() => void load()}
+              className={loading ? "animate-spin" : undefined}
+            />
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={async () => setFs(await toggleFullscreen())}
-            title={fs ? "Exit full screen" : "Full screen"}
-            aria-label={fs ? "Exit full screen" : "Full screen"}
-            className="grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-white/5 hover:text-ink"
-          >
-            {fs ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </button>
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="grid h-9 w-9 place-items-center rounded-xl border border-line text-muted transition hover:text-ink"
-            aria-label="Refresh"
-          >
-            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-          </button>
+            <Tabs
+              items={[
+                { value: "month", label: "Month" },
+                { value: "week", label: "Week" },
+                { value: "year", label: "Year" },
+              ]}
+              value={view}
+              onChange={(v) => changeView(v as ViewMode)}
+            />
 
-          <div className="flex items-center gap-1 rounded-xl border border-line bg-elevated p-1">
-            {(["month", "week", "year"] as ViewMode[]).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => changeView(m)}
-                className={cn(
-                  "rounded-lg px-3 py-1.5 text-xs font-medium capitalize transition",
-                  view === m ? "bg-accent text-white" : "text-muted hover:text-ink",
-                )}
-              >
-                {m}
-              </button>
-            ))}
-          </div>
+            <div className="flex items-center gap-0.5 rounded-xl border border-line bg-surface p-0.5">
+              <IconButton
+                icon={ChevronLeft}
+                label={`Previous ${view}`}
+                size="sm"
+                onClick={() => shift(-1)}
+              />
+              <span className="min-w-[150px] px-1 text-center text-sm font-medium text-ink">
+                {headerLabel}
+              </span>
+              <IconButton
+                icon={ChevronRight}
+                label={`Next ${view}`}
+                size="sm"
+                onClick={() => shift(1)}
+              />
+            </div>
 
-          <div className="flex items-center gap-1 rounded-xl border border-line bg-elevated p-1">
-            <button
-              type="button"
-              onClick={() => shift(-1)}
-              className="grid h-7 w-7 place-items-center rounded-lg text-muted transition hover:text-ink"
-              aria-label={`Previous ${view}`}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <span className="min-w-[150px] text-center text-sm font-medium text-ink">
-              {headerLabel}
-            </span>
-            <button
-              type="button"
-              onClick={() => shift(1)}
-              className="grid h-7 w-7 place-items-center rounded-lg text-muted transition hover:text-ink"
-              aria-label={`Next ${view}`}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={goToday}
-            className="rounded-xl border border-line px-3 py-2 text-sm text-muted transition hover:text-ink"
-          >
-            Today
-          </button>
-        </div>
-      </div>
+            <Button variant="secondary" onClick={goToday}>
+              Today
+            </Button>
+          </>
+        }
+      />
 
       {error && (
-        <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-xs text-red-300">
+        <p className="rounded-xl border border-danger/40 bg-danger-soft px-4 py-2 text-xs text-danger">
           {error}
         </p>
       )}
 
       {view === "month" && (
-        <div className="overflow-hidden rounded-2xl border border-line bg-elevated">
-          <div className="grid grid-cols-7 border-b border-line bg-white/5">
+        <Card padding="none" className="overflow-hidden">
+          <div className="grid grid-cols-7 border-b border-line bg-surface">
             {WEEKDAYS.map((d) => (
               <div
                 key={d}
@@ -398,8 +378,8 @@ export default function CalendarPage() {
                   key={i}
                   onClick={() => openCreate(key)}
                   className={cn(
-                    "min-h-[96px] cursor-pointer border-b border-r border-line p-1.5 transition hover:bg-white/[0.03]",
-                    !inMonth && "bg-white/[0.02] text-muted",
+                    "min-h-[96px] cursor-pointer border-b border-r border-line p-1.5 transition-colors duration-150 hover:bg-raised",
+                    !inMonth && "bg-surface text-muted",
                   )}
                 >
                   <div className="mb-1 flex justify-end">
@@ -407,10 +387,10 @@ export default function CalendarPage() {
                       className={cn(
                         "grid h-6 w-6 place-items-center rounded-full text-[11px]",
                         isToday
-                          ? "bg-accent font-semibold text-white"
+                          ? "bg-accent font-semibold text-ink"
                           : inMonth
                             ? "text-ink"
-                            : "text-muted",
+                            : "text-faint",
                       )}
                     >
                       {date.getDate()}
@@ -418,15 +398,10 @@ export default function CalendarPage() {
                   </div>
                   <div className="space-y-1">
                     {dayTasks.slice(0, 3).map((t) => (
-                      <div
-                        key={t.id}
-                        title={t.title}
-                        className={cn(
-                          "truncate rounded-md border px-1.5 py-0.5 text-[10px]",
-                          statusClass(t.status),
-                        )}
-                      >
-                        {t.title}
+                      <div key={t.id} title={t.title} className="truncate">
+                        <Badge tone={statusTone(t.status)} className="w-full">
+                          <span className="truncate">{t.title}</span>
+                        </Badge>
                       </div>
                     ))}
                     {dayTasks.length > 3 && (
@@ -439,12 +414,12 @@ export default function CalendarPage() {
               );
             })}
           </div>
-        </div>
+        </Card>
       )}
 
       {view === "week" && (
-        <div className="overflow-hidden rounded-2xl border border-line bg-elevated">
-          <div className="grid grid-cols-7 border-b border-line bg-white/5">
+        <Card padding="none" className="overflow-hidden">
+          <div className="grid grid-cols-7 border-b border-line bg-surface">
             {weekDays.map((d) => {
               const key = dayKey(d);
               const isToday = key === todayKey;
@@ -453,7 +428,7 @@ export default function CalendarPage() {
                   key={key}
                   type="button"
                   onClick={() => openCreate(key)}
-                  className="flex flex-col items-center gap-0.5 px-2 py-2 transition hover:bg-white/5"
+                  className="flex flex-col items-center gap-0.5 px-2 py-2 transition-colors duration-150 hover:bg-raised"
                 >
                   <span className="text-[11px] font-medium uppercase tracking-wide text-muted">
                     {WEEKDAYS[(d.getDay() + 6) % 7]}
@@ -461,7 +436,7 @@ export default function CalendarPage() {
                   <span
                     className={cn(
                       "grid h-6 w-6 place-items-center rounded-full text-[11px]",
-                      isToday ? "bg-accent font-semibold text-white" : "text-ink",
+                      isToday ? "bg-accent font-semibold text-ink" : "text-ink",
                     )}
                   >
                     {d.getDate()}
@@ -482,34 +457,31 @@ export default function CalendarPage() {
                 >
                   <div className="space-y-1">
                     {dayTasks.map((t) => (
-                      <div
-                        key={t.id}
-                        title={t.title}
-                        className={cn(
-                          "truncate rounded-md border px-1.5 py-0.5 text-[10px]",
-                          statusClass(t.status),
-                        )}
-                      >
-                        {t.title}
+                      <div key={t.id} title={t.title} className="truncate">
+                        <Badge tone={statusTone(t.status)} className="w-full">
+                          <span className="truncate">{t.title}</span>
+                        </Badge>
                       </div>
                     ))}
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={Plus}
                       onClick={() => openCreate(key)}
-                      className="flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-line py-1.5 text-[10px] text-muted transition hover:border-accent/40 hover:text-ink"
+                      className="w-full border border-dashed border-line"
                     >
-                      <Plus className="h-3 w-3" /> Add
-                    </button>
+                      Add
+                    </Button>
                   </div>
                 </div>
               );
             })}
           </div>
-        </div>
+        </Card>
       )}
 
       {view === "year" && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {MONTHS.map((name, m) => (
             <button
               key={name}
@@ -518,13 +490,13 @@ export default function CalendarPage() {
                 setView("month");
                 setCursor(new Date(year, m, 1));
               }}
-              className="rounded-2xl border border-line bg-elevated p-4 text-left transition hover:border-accent/40"
+              className="rounded-2xl border border-line bg-elevated p-4 text-left transition-colors duration-150 hover:border-line-strong hover:bg-raised"
             >
-              <p className="text-sm font-medium text-ink">{name}</p>
+              <p className="text-sm font-semibold text-ink">{name}</p>
               <p className="mt-1 text-xs text-muted">
                 {monthCounts[m]} task{monthCounts[m] === 1 ? "" : "s"}
               </p>
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/5">
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface">
                 <div
                   className="h-full rounded-full bg-accent"
                   style={{ width: `${Math.min(100, monthCounts[m] * 12)}%` }}
@@ -551,87 +523,88 @@ export default function CalendarPage() {
                   ? "Tasks with a due date this week will appear here."
                   : "Tasks with a due date in this month will appear here."
             }
+            action={
+              <Button
+                variant="primary"
+                icon={Plus}
+                onClick={() => openCreate(todayKey)}
+              >
+                New task
+              </Button>
+            }
           />
         )
       )}
 
       <Modal open={open} onClose={() => setOpen(false)} title="New task">
         <form onSubmit={onSubmit} className="space-y-3">
-          <div>
-            <label className={labelCls}>Title</label>
-            <input
+          <Field label="Title">
+            <Input
               autoFocus
               value={form.title}
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-              className={inputCls}
               placeholder="What needs doing?"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className={labelCls}>Description</label>
+          <Field label="Description">
             <textarea
               value={form.description}
               onChange={(e) =>
                 setForm((f) => ({ ...f, description: e.target.value }))
               }
               rows={3}
-              className={inputCls}
+              className="field"
               placeholder="Optional details…"
             />
-          </div>
+          </Field>
 
           <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className={labelCls}>Status</label>
+            <Field label="Status">
               <select
                 value={form.status}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, status: e.target.value as TaskStatus }))
                 }
-                className={inputCls}
+                className="field"
               >
                 <option value="todo">To do</option>
                 <option value="in_progress">In progress</option>
                 <option value="done">Done</option>
               </select>
-            </div>
-            <div>
-              <label className={labelCls}>Priority</label>
+            </Field>
+            <Field label="Priority">
               <select
                 value={form.priority}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, priority: e.target.value }))
                 }
-                className={inputCls}
+                className="field"
               >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
               </select>
-            </div>
-            <div>
-              <label className={labelCls}>Due date</label>
-              <input
+            </Field>
+            <Field label="Due date">
+              <Input
                 type="date"
                 value={form.dueDate ?? ""}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, dueDate: e.target.value || null }))
                 }
-                className={inputCls}
               />
-            </div>
+            </Field>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Folder</label>
+            <Field label="Folder">
               <select
                 value={form.folderId ?? ""}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, folderId: e.target.value || null }))
                 }
-                className={inputCls}
+                className="field"
               >
                 <option value="">No folder</option>
                 {folders.map((f) => (
@@ -640,34 +613,24 @@ export default function CalendarPage() {
                   </option>
                 ))}
               </select>
-            </div>
-            <div>
-              <label className={labelCls}>Tags (comma separated)</label>
-              <input
+            </Field>
+            <Field label="Tags (comma separated)">
+              <Input
                 value={tagsText}
                 onChange={(e) => setTagsText(e.target.value)}
-                className={inputCls}
                 placeholder="urgent, home"
               />
-            </div>
+            </Field>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="rounded-xl border border-line px-4 py-2 text-sm text-muted transition hover:text-ink"
-            >
+            <Button variant="secondary" onClick={() => setOpen(false)}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-            >
+            </Button>
+            <Button type="submit" variant="primary" disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               Create task
-            </button>
+            </Button>
           </div>
         </form>
       </Modal>

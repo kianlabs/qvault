@@ -98,12 +98,12 @@ function Shell() {
   }
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-surface text-ink">
+    <div className="flex h-full w-full overflow-hidden bg-bg text-ink">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />
         <main className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-6xl px-6 py-8">
+          <div className="mx-auto w-full max-w-[1400px] px-8 py-7">
             <ErrorBoundary>
               <Routes>
                 <Route path="/" element={<DashboardPage />} />

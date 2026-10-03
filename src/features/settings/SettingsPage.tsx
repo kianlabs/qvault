@@ -3,7 +3,8 @@
 // password, recovery code, reset) through the security API.
 // Wave 3: menambah section "Data" (backup/restore terenkripsi, CSV, templates)
 // dan section "About" (WAVE3-CONTRACT.md §B).
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+// UI: Calm Precision design system — lapisan tampilan saja, logika tidak diubah.
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   AlertTriangle,
   Database,
@@ -22,6 +23,7 @@ import {
   Trash2,
   Upload,
   User,
+  type LucideIcon,
 } from "lucide-react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { api } from "../../lib/api";
@@ -31,6 +33,18 @@ import { useDataStore } from "../../store/useDataStore";
 import { useToast } from "../../components/Toast";
 import Modal from "../../components/Modal";
 import AboutCard from "../../components/AboutCard";
+import {
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  Field,
+  IconButton,
+  Input,
+  PageHeader,
+  RowActions,
+  Toggle,
+} from "../../components/ui";
 import { cn, errorMessage } from "../../lib/utils";
 import type { BrowserKind, CsvKind, Theme } from "../../lib/types";
 
@@ -38,11 +52,11 @@ const ACCENTS = ["#7c5cff", "#22d3ee", "#34d399", "#f472b6", "#f59e0b"];
 
 /** Wave 5 — preset tema bernama + warna swatch untuk preview. */
 const THEMES: { id: Theme; label: string; swatch: string }[] = [
-  { id: "dark", label: "Dark", swatch: "#0e1015" },
-  { id: "light", label: "Light", swatch: "#f6f7fb" },
-  { id: "slate", label: "Dark · Slate", swatch: "#0f172a" },
-  { id: "nord", label: "Dark · Nord", swatch: "#2e3440" },
-  { id: "sepia", label: "Light · Sepia", swatch: "#f4ecd8" },
+  { id: "dark", label: "Dark", swatch: "#12151c" },
+  { id: "light", label: "Light", swatch: "#ffffff" },
+  { id: "slate", label: "Slate", swatch: "#16223a" },
+  { id: "nord", label: "Nord", swatch: "#363d4b" },
+  { id: "sepia", label: "Sepia", swatch: "#fdf8ec" },
 ];
 
 const CSV_KINDS: { value: CsvKind; label: string }[] = [
@@ -134,6 +148,25 @@ export default function SettingsPage() {
       setSaving(false);
     }
   }
+
+  /**
+   * Appearance diterapkan langsung (subtitle halaman menjanjikannya). Setelah
+   * user berhenti mengubah selama 600ms, simpan ke backend + beri toast ringkas.
+   * Mount pertama di-skip supaya tidak menulis ulang saat halaman dibuka.
+   */
+  const appearanceMounted = useRef(false);
+  useEffect(() => {
+    if (!settings) return;
+    if (!appearanceMounted.current) {
+      appearanceMounted.current = true;
+      return;
+    }
+    const id = window.setTimeout(() => {
+      void persist({ theme, accent, fontSize, showIcons }, "Appearance saved");
+    }, 600);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [theme, accent, fontSize, showIcons]);
 
   async function onChangePassword(e: FormEvent) {
     e.preventDefault();
@@ -339,29 +372,25 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold text-ink">Settings</h1>
-        <p className="mt-1 text-sm text-muted">
-          Preferences are stored locally and applied immediately.
-        </p>
-      </header>
+      <PageHeader
+        title="Settings"
+        subtitle="Preferences are stored locally and applied immediately."
+      />
 
       {/* Profile */}
       <Section icon={User} title="Profile">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Display name">
-            <input
+            <Input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              className={inputCls}
               placeholder="Your name"
             />
           </Field>
           <Field label="Avatar URL">
-            <input
+            <Input
               value={avatar}
               onChange={(e) => setAvatar(e.target.value)}
-              className={inputCls}
               placeholder="https://…"
             />
           </Field>
@@ -369,36 +398,45 @@ export default function SettingsPage() {
         <SaveButton
           saving={saving}
           onClick={() =>
-            persist(
-              { displayName, avatar: avatar || null },
-              "Profile saved",
-            )
+            persist({ displayName, avatar: avatar || null }, "Profile saved")
           }
         />
       </Section>
 
-      {/* Appearance */}
-      <Section icon={Palette} title="Appearance">
+      {/* Appearance — applied immediately (no Save button). */}
+      <Section
+        icon={Palette}
+        title="Appearance"
+        hint="Applied immediately"
+      >
         <Field label="Theme">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
             {THEMES.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setTheme(t.id)}
+                aria-pressed={theme === t.id}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm transition",
+                  "flex flex-col items-stretch gap-2 rounded-xl border p-1.5 text-left transition-colors duration-150",
                   theme === t.id
-                    ? "border-accent bg-accent-soft text-ink"
-                    : "border-line text-muted hover:text-ink",
+                    ? "border-accent bg-accent-soft"
+                    : "border-line hover:border-line-strong",
                 )}
               >
                 <span
                   aria-hidden
-                  className="h-5 w-5 shrink-0 rounded-md border border-line"
+                  className="h-12 w-full rounded-lg border border-line"
                   style={{ backgroundColor: t.swatch }}
                 />
-                <span className="truncate">{t.label}</span>
+                <span
+                  className={cn(
+                    "px-0.5 pb-0.5 text-xs font-medium",
+                    theme === t.id ? "text-ink" : "text-muted",
+                  )}
+                >
+                  {t.label}
+                </span>
               </button>
             ))}
           </div>
@@ -412,9 +450,10 @@ export default function SettingsPage() {
                 type="button"
                 onClick={() => setAccent(c)}
                 aria-label={`Accent ${c}`}
+                aria-pressed={accent.toLowerCase() === c.toLowerCase()}
                 style={{ backgroundColor: c }}
                 className={cn(
-                  "h-8 w-8 rounded-lg border-2 transition",
+                  "h-8 w-8 rounded-lg border-2 transition-colors duration-150",
                   accent.toLowerCase() === c.toLowerCase()
                     ? "border-ink"
                     : "border-transparent",
@@ -425,6 +464,7 @@ export default function SettingsPage() {
               type="color"
               value={accent}
               onChange={(e) => setAccent(e.target.value)}
+              aria-label="Custom accent colour"
               className="h-8 w-10 cursor-pointer rounded-lg border border-line bg-surface"
             />
           </div>
@@ -449,56 +489,31 @@ export default function SettingsPage() {
               Show each site&apos;s favicon in the vault list.
             </p>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={showIcons}
-            aria-label="Show website icons"
-            onClick={() => setShowIcons((v) => !v)}
-            className={cn(
-              "relative h-6 w-11 shrink-0 rounded-full border transition",
-              showIcons ? "border-accent bg-accent" : "border-line bg-surface",
-            )}
-          >
-            <span
-              className={cn(
-                "absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all",
-                showIcons ? "left-[22px]" : "left-0.5",
-              )}
-            />
-          </button>
+          <Toggle
+            checked={showIcons}
+            onChange={setShowIcons}
+            label="Show website icons"
+          />
         </div>
-
-        <SaveButton
-          saving={saving}
-          onClick={() =>
-            persist(
-              { theme, accent, fontSize, showIcons },
-              "Appearance saved",
-            )
-          }
-        />
       </Section>
 
       {/* Security */}
       <Section icon={ShieldCheck} title="Security">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Auto-lock after (minutes)">
-            <input
+            <Input
               type="number"
               min={0}
               value={autoLockMin}
               onChange={(e) => setAutoLockMin(Number(e.target.value))}
-              className={inputCls}
             />
           </Field>
           <Field label="Clear clipboard after (seconds)">
-            <input
+            <Input
               type="number"
               min={0}
               value={clipboardClearSec}
               onChange={(e) => setClipboardClearSec(Number(e.target.value))}
-              className={inputCls}
             />
           </Field>
         </div>
@@ -509,82 +524,68 @@ export default function SettingsPage() {
           }
         />
 
-        <div className="mt-6 flex flex-wrap gap-2 border-t border-line pt-5">
-          <button
-            type="button"
+        <div className="flex flex-wrap gap-2 border-t border-line pt-5">
+          <Button
+            variant="secondary"
+            icon={KeyRound}
             onClick={() => setPwdOpen(true)}
-            className="inline-flex items-center gap-2 rounded-xl border border-line px-4 py-2 text-sm text-muted transition hover:text-ink"
           >
-            <KeyRound className="h-4 w-4" />
             Change master password
-          </button>
-          <button
-            type="button"
-            onClick={onGenerateRecovery}
-            className="inline-flex items-center gap-2 rounded-xl border border-line px-4 py-2 text-sm text-muted transition hover:text-ink"
-          >
-            <RefreshCw className="h-4 w-4" />
+          </Button>
+          <Button variant="secondary" icon={RefreshCw} onClick={onGenerateRecovery}>
             Generate recovery code
-          </button>
+          </Button>
         </div>
       </Section>
 
       {/* Data */}
       <Section icon={Database} title="Data">
         {/* Backup vault */}
-        <div className="space-y-3 rounded-xl border border-line p-4">
+        <div className="space-y-3 rounded-xl border border-line bg-surface p-4">
           <div>
-            <p className="text-sm font-medium text-ink">Backup vault</p>
+            <p className="text-sm font-semibold text-ink">Backup vault</p>
             <p className="text-xs text-muted">
               Export an encrypted copy of every item, note, task and setting.
             </p>
           </div>
           <Field label="Backup password">
-            <input
+            <Input
               type="password"
               value={backupPw}
               onChange={(e) => setBackupPw(e.target.value)}
-              className={inputCls}
               placeholder="Encrypt the backup with…"
             />
           </Field>
-          <button
-            type="button"
-            onClick={onExportBackup}
-            disabled={dataBusy}
-            className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-          >
+          <Button variant="primary" onClick={onExportBackup} disabled={dataBusy}>
             {dataBusy ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Download className="h-4 w-4" />
             )}
             Export backup
-          </button>
+          </Button>
         </div>
 
         {/* Restore vault */}
-        <div className="space-y-3 rounded-xl border border-red-500/30 bg-red-500/5 p-4">
+        <div className="space-y-3 rounded-xl border border-danger/30 bg-danger-soft p-4">
           <div>
-            <p className="text-sm font-medium text-ink">Restore vault</p>
-            <p className="text-xs text-red-300">
+            <p className="text-sm font-semibold text-ink">Restore vault</p>
+            <p className="text-xs text-danger">
               This will REPLACE all current data with the backup.
             </p>
           </div>
           <Field label="Backup password">
-            <input
+            <Input
               type="password"
               value={restorePw}
               onChange={(e) => setRestorePw(e.target.value)}
-              className={inputCls}
               placeholder="Password used for the backup…"
             />
           </Field>
-          <button
-            type="button"
+          <Button
+            variant="danger"
             onClick={onImportBackup}
             disabled={dataBusy}
-            className="inline-flex items-center gap-2 rounded-xl border border-red-500/40 px-4 py-2 text-sm font-medium text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
           >
             {dataBusy ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -592,13 +593,13 @@ export default function SettingsPage() {
               <Upload className="h-4 w-4" />
             )}
             Restore from file
-          </button>
+          </Button>
         </div>
 
         {/* CSV export / import */}
-        <div className="space-y-3 rounded-xl border border-line p-4">
+        <div className="space-y-3 rounded-xl border border-line bg-surface p-4">
           <div>
-            <p className="text-sm font-medium text-ink">CSV export / import</p>
+            <p className="text-sm font-semibold text-ink">CSV export / import</p>
             <p className="text-xs text-muted">
               Move data in and out as plain-text spreadsheets.
             </p>
@@ -607,7 +608,7 @@ export default function SettingsPage() {
             <select
               value={csvKind}
               onChange={(e) => setCsvKind(e.target.value as CsvKind)}
-              className={inputCls}
+              className="field"
             >
               {CSV_KINDS.map((k) => (
                 <option key={k.value} value={k.value}>
@@ -617,63 +618,45 @@ export default function SettingsPage() {
             </select>
           </Field>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              icon={Download}
               onClick={onExportCsv}
               disabled={dataBusy}
-              className="inline-flex items-center gap-2 rounded-xl border border-line px-4 py-2 text-sm text-muted transition hover:text-ink disabled:opacity-50"
             >
-              <Download className="h-4 w-4" />
               Export CSV
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="secondary"
+              icon={Upload}
               onClick={onImportCsv}
               disabled={dataBusy}
-              className="inline-flex items-center gap-2 rounded-xl border border-line px-4 py-2 text-sm text-muted transition hover:text-ink disabled:opacity-50"
             >
-              <Upload className="h-4 w-4" />
               Import CSV
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Auto-backup (Wave 4) */}
-        <div className="space-y-3 rounded-xl border border-line p-4">
+        <div className="space-y-3 rounded-xl border border-line bg-surface p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-medium text-ink">Automatic backups</p>
+              <p className="text-sm font-semibold text-ink">Automatic backups</p>
               <p className="text-xs text-muted">
                 Snapshot the encrypted database on a schedule. Keeps the last 5.
               </p>
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={autoBackupEnabled}
-              aria-label="Enable automatic backups"
-              onClick={() => setAutoBackupEnabled((v) => !v)}
-              className={cn(
-                "relative h-6 w-11 shrink-0 rounded-full border transition",
-                autoBackupEnabled
-                  ? "border-accent bg-accent"
-                  : "border-line bg-surface",
-              )}
-            >
-              <span
-                className={cn(
-                  "absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all",
-                  autoBackupEnabled ? "left-[22px]" : "left-0.5",
-                )}
-              />
-            </button>
+            <Toggle
+              checked={autoBackupEnabled}
+              onChange={setAutoBackupEnabled}
+              label="Enable automatic backups"
+            />
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
+            <Button
+              variant="primary"
               onClick={onBackupNow}
               disabled={backupBusy}
-              className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
             >
               {backupBusy ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -681,33 +664,32 @@ export default function SettingsPage() {
                 <HardDriveDownload className="h-4 w-4" />
               )}
               Back up now
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="secondary"
+              icon={History}
               onClick={onShowBackups}
               disabled={backupBusy}
-              className="inline-flex items-center gap-2 rounded-xl border border-line px-4 py-2 text-sm text-muted transition hover:text-ink disabled:opacity-50"
             >
-              <History className="h-4 w-4" />
               Show backups
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Import from browser (Wave 4) */}
-        <div className="space-y-3 rounded-xl border border-line p-4">
+        <div className="space-y-3 rounded-xl border border-line bg-surface p-4">
           <div>
-            <p className="text-sm font-medium text-ink">Import from browser</p>
+            <p className="text-sm font-semibold text-ink">Import from browser</p>
             <p className="text-xs text-muted">
               Bring passwords in from a Chrome or Bitwarden CSV export.
             </p>
           </div>
           <div className="flex flex-wrap items-end gap-2">
-            <Field label="Source">
+            <Field label="Source" className="min-w-[180px]">
               <select
                 value={importKind}
                 onChange={(e) => setImportKind(e.target.value as BrowserKind)}
-                className={inputCls}
+                className="field"
               >
                 {BROWSER_KINDS.map((k) => (
                   <option key={k.value} value={k.value}>
@@ -716,11 +698,10 @@ export default function SettingsPage() {
                 ))}
               </select>
             </Field>
-            <button
-              type="button"
+            <Button
+              variant="secondary"
               onClick={onImportBrowser}
               disabled={dataBusy}
-              className="inline-flex items-center gap-2 rounded-xl border border-line px-4 py-2 text-sm text-muted transition hover:text-ink disabled:opacity-50"
             >
               {dataBusy ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -728,17 +709,15 @@ export default function SettingsPage() {
                 <Globe className="h-4 w-4" />
               )}
               Import CSV
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Templates */}
-        <div className="space-y-3 rounded-xl border border-line p-4">
+        <div className="space-y-3 rounded-xl border border-line bg-surface p-4">
           <div>
-            <p className="text-sm font-medium text-ink">Templates</p>
-            <p className="text-xs text-muted">
-              Reusable note and task templates.
-            </p>
+            <p className="text-sm font-semibold text-ink">Templates</p>
+            <p className="text-xs text-muted">Reusable note and task templates.</p>
           </div>
 
           {templates.length > 0 ? (
@@ -746,22 +725,21 @@ export default function SettingsPage() {
               {templates.map((t) => (
                 <li
                   key={t.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-3 py-2"
+                  className="group flex items-center gap-3 rounded-lg border border-line bg-raised px-3 py-2"
                 >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm text-ink">{t.name}</p>
-                    <p className="text-xs uppercase tracking-wide text-muted">
-                      {t.kind}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onRemoveTemplate(t.id)}
-                    aria-label={`Delete ${t.name}`}
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-red-500/10 hover:text-red-300"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <p className="min-w-0 flex-1 truncate text-sm text-ink">
+                    {t.name}
+                  </p>
+                  <Badge tone="neutral">{t.kind}</Badge>
+                  <RowActions>
+                    <IconButton
+                      icon={Trash2}
+                      label={`Delete ${t.name}`}
+                      tone="danger"
+                      size="sm"
+                      onClick={() => onRemoveTemplate(t.id)}
+                    />
+                  </RowActions>
                 </li>
               ))}
             </ul>
@@ -775,10 +753,9 @@ export default function SettingsPage() {
           >
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Name">
-                <input
+                <Input
                   value={tplName}
                   onChange={(e) => setTplName(e.target.value)}
-                  className={inputCls}
                   placeholder="Template name"
                 />
               </Field>
@@ -786,7 +763,7 @@ export default function SettingsPage() {
                 <select
                   value={tplKind}
                   onChange={(e) => setTplKind(e.target.value)}
-                  className={inputCls}
+                  className="field"
                 >
                   <option value="note">note</option>
                   <option value="task">task</option>
@@ -798,17 +775,13 @@ export default function SettingsPage() {
                 value={tplBody}
                 onChange={(e) => setTplBody(e.target.value)}
                 rows={3}
-                className={cn(inputCls, "resize-y font-mono")}
+                className="field resize-y font-mono"
                 placeholder="Template content or JSON…"
               />
             </Field>
-            <button
-              type="submit"
-              className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-            >
-              <Plus className="h-4 w-4" />
+            <Button variant="primary" type="submit" icon={Plus}>
               Save template
-            </button>
+            </Button>
           </form>
         </div>
       </Section>
@@ -819,8 +792,8 @@ export default function SettingsPage() {
       </Section>
 
       {/* Danger zone */}
-      <section className="rounded-2xl border border-red-500/30 bg-red-500/5 p-6">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-red-300">
+      <Card padding="lg" className="border-danger/30 bg-danger-soft">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-danger">
           <AlertTriangle className="h-4 w-4" />
           Danger zone
         </h2>
@@ -828,15 +801,16 @@ export default function SettingsPage() {
           Resetting wipes every vault item, note, task and income entry. Only a
           valid recovery code can authorise it. This cannot be undone.
         </p>
-        <button
-          type="button"
-          onClick={() => setResetOpen(true)}
-          className="mt-4 inline-flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-        >
-          <AlertTriangle className="h-4 w-4" />
-          Reset vault
-        </button>
-      </section>
+        <div className="mt-4">
+          <Button
+            variant="danger"
+            icon={AlertTriangle}
+            onClick={() => setResetOpen(true)}
+          >
+            Reset vault
+          </Button>
+        </div>
+      </Card>
 
       {/* Change password modal */}
       <Modal
@@ -846,46 +820,35 @@ export default function SettingsPage() {
       >
         <form onSubmit={onChangePassword} className="space-y-4">
           <Field label="Current password">
-            <input
+            <Input
               type="password"
               value={current}
               onChange={(e) => setCurrent(e.target.value)}
-              className={inputCls}
               autoFocus
             />
           </Field>
           <Field label="New password">
-            <input
+            <Input
               type="password"
               value={next}
               onChange={(e) => setNext(e.target.value)}
-              className={inputCls}
             />
           </Field>
           <Field label="Confirm new password">
-            <input
+            <Input
               type="password"
               value={confirmPw}
               onChange={(e) => setConfirmPw(e.target.value)}
-              className={inputCls}
             />
           </Field>
           <div className="flex justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => setPwdOpen(false)}
-              className="rounded-xl border border-line px-4 py-2 text-sm text-muted transition hover:text-ink"
-            >
+            <Button variant="secondary" onClick={() => setPwdOpen(false)}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={busy}
-              className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-            >
+            </Button>
+            <Button variant="primary" type="submit" disabled={busy}>
               {busy && <Loader2 className="h-4 w-4 animate-spin" />}
               Update
-            </button>
+            </Button>
           </div>
         </form>
       </Modal>
@@ -904,13 +867,9 @@ export default function SettingsPage() {
           {recovery}
         </pre>
         <div className="mt-5 flex justify-end">
-          <button
-            type="button"
-            onClick={() => setRecovery(null)}
-            className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-          >
-            I've saved it
-          </button>
+          <Button variant="primary" onClick={() => setRecovery(null)}>
+            I&apos;ve saved it
+          </Button>
         </div>
       </Modal>
 
@@ -925,30 +884,25 @@ export default function SettingsPage() {
             Enter your recovery code to wipe all data and start over.
           </p>
           <Field label="Recovery code">
-            <input
+            <Input
               value={resetCode}
               onChange={(e) => setResetCode(e.target.value)}
-              className={inputCls}
               autoFocus
               placeholder="XXXX-XXXX-XXXX-XXXX"
             />
           </Field>
           <div className="flex justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => setResetOpen(false)}
-              className="rounded-xl border border-line px-4 py-2 text-sm text-muted transition hover:text-ink"
-            >
+            <Button variant="secondary" onClick={() => setResetOpen(false)}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="danger"
               type="submit"
               disabled={busy || !resetCode}
-              className="inline-flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
             >
               {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-              Wipe & reset
-            </button>
+              Wipe &amp; reset
+            </Button>
           </div>
         </form>
       </Modal>
@@ -986,41 +940,28 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-const inputCls =
-  "w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink outline-none transition focus:border-accent";
-
 function Section({
-  icon: Icon,
+  icon,
   title,
+  hint,
   children,
 }: {
-  icon: typeof User;
+  icon: LucideIcon;
   title: string;
+  hint?: string;
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-line bg-elevated p-6">
-      <h2 className="mb-5 flex items-center gap-2 text-sm font-semibold text-ink">
-        <Icon className="h-4 w-4 text-accent" />
-        {title}
-      </h2>
+    <Card padding="lg">
+      <CardHeader
+        icon={icon}
+        title={title}
+        action={
+          hint ? <Badge tone="neutral">{hint}</Badge> : undefined
+        }
+      />
       <div className="space-y-4">{children}</div>
-    </section>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-medium text-muted">{label}</span>
-      {children}
-    </label>
+    </Card>
   );
 }
 
@@ -1033,19 +974,14 @@ function SaveButton({
 }) {
   return (
     <div className="pt-1">
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={saving}
-        className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-      >
+      <Button variant="primary" onClick={onClick} disabled={saving}>
         {saving ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
           <Save className="h-4 w-4" />
         )}
         Save
-      </button>
+      </Button>
     </div>
   );
 }

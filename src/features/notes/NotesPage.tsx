@@ -1,4 +1,4 @@
-// QVAULT — Notes page. Uses useNotesStore + shared UI (FINAL-CONTRACT B/C/D).
+// QVAULT — Notes page. Uses useNotesStore + shared UI (Calm Precision).
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   Copy,
@@ -7,7 +7,6 @@ import {
   Pencil,
   Plus,
   RefreshCw,
-  Search,
   Star,
   Trash2,
 } from "lucide-react";
@@ -15,17 +14,25 @@ import {
 import EmptyState from "../../components/EmptyState";
 import Modal from "../../components/Modal";
 import { useToast } from "../../components/Toast";
+import {
+  Badge,
+  Button,
+  Card,
+  Field,
+  IconButton,
+  Input,
+  Menu,
+  PageHeader,
+  RowActions,
+  SearchInput,
+  Tabs,
+  Toggle,
+} from "../../components/ui";
 import { useFoldersStore } from "../../store/useFoldersStore";
 import { useNotesStore } from "../../store/useNotesStore";
 import type { Note, NotePayload } from "../../lib/types";
 import { cn, formatRelative, parseTags, truncate } from "../../lib/utils";
 import { renderMarkdown } from "../../lib/markdown";
-
-const inputCls =
-  "w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none transition focus:border-accent";
-const labelCls = "mb-1 block text-xs font-medium text-muted";
-const iconBtnCls =
-  "grid h-7 w-7 place-items-center rounded-lg text-muted transition hover:bg-white/5 hover:text-ink";
 
 const EMPTY_FORM: NotePayload = {
   title: "",
@@ -171,60 +178,45 @@ export default function NotesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-ink">Notes</h1>
-          <p className="text-xs text-muted">
-            {filtered.length} of {items.length} note
-            {items.length === 1 ? "" : "s"}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="grid h-9 w-9 place-items-center rounded-xl border border-line text-muted transition hover:text-ink"
-            aria-label="Refresh"
-          >
-            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-          </button>
-          <button
-            type="button"
-            onClick={openCreate}
-            className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-          >
-            <Plus className="h-4 w-4" /> New note
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Notes"
+        subtitle={`${filtered.length} of ${items.length} note${items.length === 1 ? "" : "s"}`}
+        actions={
+          <>
+            <IconButton
+              icon={RefreshCw}
+              label="Refresh"
+              onClick={() => void load()}
+              className={cn(loading && "[&>svg]:animate-spin")}
+            />
+            <Button variant="primary" icon={Plus} onClick={openCreate}>
+              New note
+            </Button>
+          </>
+        }
+      />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-          <input
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-[220px] flex-1">
+          <SearchInput
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search notes…"
-            className="w-full rounded-xl border border-line bg-surface py-2.5 pl-9 pr-3 text-sm text-ink outline-none transition focus:border-accent"
+            aria-label="Search notes"
           />
         </div>
-        <button
-          type="button"
-          onClick={() => setFavoriteOnly((v) => !v)}
-          className={cn(
-            "flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm transition",
-            favoriteOnly
-              ? "border-accent bg-accent-soft text-ink"
-              : "border-line text-muted hover:text-ink",
-          )}
-        >
-          <Star className={cn("h-4 w-4", favoriteOnly && "fill-current")} />
-          Favorites
-        </button>
+        <Tabs
+          items={[
+            { value: "all", label: "All" },
+            { value: "favorites", label: "Favorites" },
+          ]}
+          value={favoriteOnly ? "favorites" : "all"}
+          onChange={(v) => setFavoriteOnly(v === "favorites")}
+        />
       </div>
 
       {error && (
-        <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-xs text-red-300">
+        <p className="rounded-xl border border-danger/40 bg-danger-soft px-4 py-2 text-xs text-danger">
           {error}
         </p>
       )}
@@ -238,87 +230,88 @@ export default function NotesPage() {
           icon={FileText}
           title="No notes"
           hint="Capture an idea, a snippet, or anything worth remembering."
+          action={
+            <Button variant="secondary" icon={Plus} onClick={openCreate}>
+              New note
+            </Button>
+          }
         />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {filtered.map((note) => (
-            <article
-              key={note.id}
-              className="flex flex-col gap-3 rounded-2xl border border-line bg-elevated p-4"
-            >
+            <Card key={note.id} padding="md" className="group flex flex-col gap-3">
               <div className="flex items-start justify-between gap-2">
-                <h3 className="line-clamp-1 text-sm font-semibold text-ink">
-                  {note.title}
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => void onToggleFavorite(note)}
-                  className={iconBtnCls}
-                  aria-label="Toggle favorite"
-                >
-                  <Star
+                <div className="flex min-w-0 items-center gap-2">
+                  <h3 className="line-clamp-1 text-sm font-semibold text-ink">
+                    {note.title}
+                  </h3>
+                  {busyId === note.id && (
+                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted" />
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <IconButton
+                    icon={Star}
+                    label={
+                      note.favorite ? "Remove from favorites" : "Add to favorites"
+                    }
+                    onClick={() => void onToggleFavorite(note)}
                     className={cn(
-                      "h-4 w-4",
-                      note.favorite && "fill-current text-amber-400",
+                      note.favorite &&
+                        "text-warn hover:bg-warn-soft hover:text-warn [&>svg]:fill-current",
                     )}
                   />
-                </button>
+                  <RowActions>
+                    <IconButton
+                      icon={Pencil}
+                      label="Edit note"
+                      onClick={() => openEdit(note)}
+                    />
+                    <Menu
+                      label="More actions"
+                      items={[
+                        {
+                          label: "Duplicate",
+                          icon: Copy,
+                          onClick: () => void onDuplicate(note),
+                          disabled: busyId === note.id,
+                        },
+                        {
+                          label: "Delete",
+                          icon: Trash2,
+                          onClick: () => void onDelete(note),
+                          danger: true,
+                          disabled: busyId === note.id,
+                        },
+                      ]}
+                    />
+                  </RowActions>
+                </div>
               </div>
 
               <p className="whitespace-pre-wrap text-xs leading-relaxed text-muted">
                 {truncate(note.content, 200) || "No content"}
               </p>
 
-              {note.tags.length > 0 && (
+              {note.tags.filter((t) => t.toLowerCase() !== "note").length > 0 && (
                 <div className="flex flex-wrap gap-1">
-                  {note.tags.map((t) => (
-                    <span
-                      key={t}
-                      className="rounded-md bg-accent-soft px-2 py-0.5 text-[11px] text-ink"
-                    >
-                      {t}
-                    </span>
-                  ))}
+                  {note.tags
+                    .filter((t) => t.toLowerCase() !== "note")
+                    .map((t) => (
+                      <Badge key={t} tone="accent">
+                        {t}
+                      </Badge>
+                    ))}
                 </div>
               )}
 
-              <div className="mt-auto flex items-center justify-between gap-2 pt-1 text-[11px] text-muted">
+              <div className="mt-auto flex items-center gap-1 pt-1 text-xs text-muted">
                 <span className="truncate">
                   {folderName.get(note.folderId ?? "") ?? "Unfiled"} ·{" "}
                   {formatRelative(note.updatedAt)}
                 </span>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => openEdit(note)}
-                    className={iconBtnCls}
-                    aria-label="Edit"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void onDuplicate(note)}
-                    className={iconBtnCls}
-                    aria-label="Duplicate"
-                  >
-                    {busyId === note.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void onDelete(note)}
-                    className={cn(iconBtnCls, "hover:text-red-400")}
-                    aria-label="Delete"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
               </div>
-            </article>
+            </Card>
           ))}
         </div>
       )}
@@ -330,43 +323,25 @@ export default function NotesPage() {
         className="max-w-2xl"
       >
         <form onSubmit={onSubmit} className="space-y-3">
-          <div>
-            <label className={labelCls}>Title</label>
-            <input
+          <Field label="Title">
+            <Input
               value={form.title}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, title: e.target.value }))
-              }
-              className={inputCls}
+              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
               placeholder="Note title"
             />
-          </div>
+          </Field>
 
           <div>
-            <div className="mb-1 flex items-center justify-between">
-              <label className={cn(labelCls, "mb-0")}>Content</label>
-              <div className="flex gap-1 rounded-lg border border-line bg-surface p-0.5">
-                <button
-                  type="button"
-                  onClick={() => setPreview(false)}
-                  className={cn(
-                    "rounded-md px-2.5 py-1 text-[11px] font-medium transition",
-                    !preview ? "bg-accent text-white" : "text-muted hover:text-ink",
-                  )}
-                >
-                  Write
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPreview(true)}
-                  className={cn(
-                    "rounded-md px-2.5 py-1 text-[11px] font-medium transition",
-                    preview ? "bg-accent text-white" : "text-muted hover:text-ink",
-                  )}
-                >
-                  Preview
-                </button>
-              </div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-xs font-medium text-muted">Content</span>
+              <Tabs
+                items={[
+                  { value: "write", label: "Write" },
+                  { value: "preview", label: "Preview" },
+                ]}
+                value={preview ? "preview" : "write"}
+                onChange={(v) => setPreview(v === "preview")}
+              />
             </div>
             {preview ? (
               <div className="min-h-[12rem] rounded-xl border border-line bg-surface px-4 py-3">
@@ -383,21 +358,20 @@ export default function NotesPage() {
                   setForm((f) => ({ ...f, content: e.target.value }))
                 }
                 rows={10}
-                className={cn(inputCls, "font-mono leading-relaxed")}
+                className="field font-mono leading-relaxed"
                 placeholder="Write anything… Markdown supported."
               />
             )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Folder</label>
+            <Field label="Folder">
               <select
                 value={form.folderId ?? ""}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, folderId: e.target.value || null }))
                 }
-                className={inputCls}
+                className="field"
               >
                 <option value="">No folder</option>
                 {usableFolders.map((f) => (
@@ -406,45 +380,33 @@ export default function NotesPage() {
                   </option>
                 ))}
               </select>
-            </div>
-            <div>
-              <label className={labelCls}>Tags (comma separated)</label>
-              <input
+            </Field>
+            <Field label="Tags (comma separated)">
+              <Input
                 value={tagsText}
                 onChange={(e) => setTagsText(e.target.value)}
-                className={inputCls}
                 placeholder="ideas, work"
               />
-            </div>
+            </Field>
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-ink">
-            <input
-              type="checkbox"
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-ink">Mark as favorite</span>
+            <Toggle
               checked={form.favorite}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, favorite: e.target.checked }))
-              }
+              onChange={(v) => setForm((f) => ({ ...f, favorite: v }))}
+              label="Mark as favorite"
             />
-            Mark as favorite
-          </label>
+          </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="rounded-xl border border-line px-4 py-2 text-sm text-muted transition hover:text-ink"
-            >
+            <Button variant="ghost" onClick={() => setOpen(false)}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-            >
+            </Button>
+            <Button type="submit" variant="primary" disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               {editing ? "Save changes" : "Create note"}
-            </button>
+            </Button>
           </div>
         </form>
       </Modal>

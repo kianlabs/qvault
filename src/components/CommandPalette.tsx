@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { buildIndex, searchIndex, type SearchHit } from "../lib/search";
 import { cn } from "../lib/utils";
+import { OPEN_PALETTE_EVENT } from "./Topbar";
 
 const MODULE_ICON: Record<SearchHit["module"], LucideIcon> = {
   vault: KeyRound,
@@ -59,7 +60,13 @@ export default function CommandPalette() {
       if (e.key === "Escape") setOpen(false);
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // Topbar memicu event ini; ini yang membuat search bar benar-benar bekerja.
+    const onOpen = () => setOpen(true);
+    window.addEventListener(OPEN_PALETTE_EVENT, onOpen);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener(OPEN_PALETTE_EVENT, onOpen);
+    };
   }, []);
 
   // Autofocus + reset query saat dibuka.
@@ -150,10 +157,10 @@ export default function CommandPalette() {
                     onClick={() => choose(hit)}
                     className={cn(
                       "flex w-full items-center gap-3 px-4 py-2.5 text-left transition",
-                      i === active ? "bg-accent-soft" : "hover:bg-white/5",
+                      i === active ? "bg-accent-soft" : "hover:bg-raised",
                     )}
                   >
-                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white/5 text-muted">
+                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-raised text-muted">
                       <Icon className="h-4 w-4" />
                     </span>
                     <span className="min-w-0 flex-1">

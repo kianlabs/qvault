@@ -5,6 +5,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 
 import { secureCopy } from "../lib/clipboard";
+import { Button } from "./ui";
 
 interface Props {
   children: ReactNode;
@@ -57,29 +58,21 @@ export default class ErrorBoundary extends Component<Props, State> {
 
     return (
       <div className="grid min-h-[60vh] place-items-center p-4">
-        <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 text-center text-ink">
-          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-red-500/10 text-red-300">
+        <div className="w-full max-w-md rounded-2xl border border-line bg-elevated p-6 text-center text-ink">
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl border border-danger/30 bg-danger-soft text-danger">
             <AlertTriangle className="h-6 w-6" />
           </div>
-          <h2 className="mt-4 text-lg font-semibold text-ink">
+          <h2 className="mt-4 text-lg font-semibold tracking-tight text-ink">
             Something went wrong
           </h2>
           <p className="mt-2 break-words text-sm text-muted">{error.message}</p>
           <div className="mt-5 flex justify-center gap-2">
-            <button
-              type="button"
-              onClick={this.onReload}
-              className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-            >
+            <Button variant="primary" onClick={this.onReload}>
               Reload
-            </button>
-            <button
-              type="button"
-              onClick={() => void this.onCopy()}
-              className="rounded-xl border border-line px-4 py-2 text-sm text-muted transition hover:text-ink"
-            >
+            </Button>
+            <Button variant="secondary" onClick={() => void this.onCopy()}>
               {this.state.copied ? "Copied" : "Copy details"}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

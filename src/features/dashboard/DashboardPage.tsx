@@ -1,20 +1,24 @@
 // QVAULT — Dashboard (route "/"). Read-only overview built from Wave-1 stores:
 // useTasksStore (dashboard_stats), useIncomeStore (income_summary), useActivityStore.
 // Wave 3 (Agent C): World clock, Vault protection, Recent credentials.
+// UI overhaul: "Calm Precision" design system (presentation only — no logic change).
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
+  Activity as ActivityIcon,
   AlertTriangle,
   ArrowRight,
   CalendarClock,
   Check,
   CheckCircle2,
+  ChevronRight,
+  FolderTree,
   KeyRound,
-  ListChecks,
   Lock,
   Maximize2,
   Minimize2,
   NotebookPen,
+  Settings as SettingsIcon,
   ShieldCheck,
   TrendingUp,
   Unlock,
@@ -31,6 +35,16 @@ import {
   formatRelative,
   initials,
 } from "../../lib/utils";
+import {
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  IconButton,
+  PageHeader,
+  StatCard,
+  type Tone,
+} from "../../components/ui";
 import EmptyState from "../../components/EmptyState";
 import WorldClock from "../../components/WorldClock";
 import { exitFullscreen, isFullscreen, toggleFullscreen } from "../../lib/fullscreen";
@@ -40,7 +54,7 @@ interface Tile {
   label: string;
   value: string;
   icon: LucideIcon;
-  tone: string;
+  tone: Tone;
   to: string;
 }
 
@@ -50,6 +64,24 @@ const PROTECTION: { label: string }[] = [
   { label: "AES-256-GCM" },
   { label: "Offline" },
 ];
+
+/** Ikon per modul untuk feed aktivitas (satu arti = satu ikon). */
+const ACTIVITY_ICONS: Record<string, LucideIcon> = {
+  security: ShieldCheck,
+  vault: KeyRound,
+  notes: NotebookPen,
+  tasks: CalendarClock,
+  income: TrendingUp,
+  folders: FolderTree,
+  settings: SettingsIcon,
+};
+
+/** Tone badge untuk status tugas. */
+function taskTone(status: string): Tone {
+  if (status === "done") return "success";
+  if (status === "in_progress") return "info";
+  return "neutral";
+}
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -93,42 +125,42 @@ export default function DashboardPage() {
       label: "Vault items",
       value: String(stats?.totalItems ?? 0),
       icon: KeyRound,
-      tone: "text-accent",
+      tone: "accent",
       to: "/vault",
     },
     {
       label: "Notes",
       value: String(stats?.totalNotes ?? 0),
       icon: NotebookPen,
-      tone: "text-sky-400",
+      tone: "info",
       to: "/notes",
     },
     {
       label: "Overdue",
       value: String(stats?.tasksOverdue ?? 0),
       icon: AlertTriangle,
-      tone: "text-red-400",
+      tone: "danger",
       to: "/tasks",
     },
     {
       label: "Due today",
       value: String(stats?.tasksToday ?? 0),
       icon: CalendarClock,
-      tone: "text-amber-400",
+      tone: "warn",
       to: "/tasks",
     },
     {
       label: "Tasks done",
       value: String(stats?.tasksDone ?? 0),
       icon: CheckCircle2,
-      tone: "text-emerald-400",
+      tone: "success",
       to: "/tasks",
     },
     {
       label: "Income this month",
       value: formatCurrency(stats?.incomeThisMonth ?? summary?.thisMonth ?? 0),
       icon: TrendingUp,
-      tone: "text-emerald-400",
+      tone: "success",
       to: "/income",
     },
   ];
@@ -144,180 +176,157 @@ export default function DashboardPage() {
     [vaultItems],
   );
 
-  const vaultCount = stats?.totalItems ?? vaultItems.length;
-
   const statusLabel = !initialized ? "Not set up" : locked ? "Locked" : "Unlocked";
-  const statusTone = !initialized
-    ? "border-line text-muted"
-    : locked
-      ? "border-amber-500/40 bg-amber-500/15 text-amber-300"
-      : "border-emerald-500/40 bg-emerald-500/15 text-emerald-300";
+  const statusTone: Tone = !initialized ? "neutral" : locked ? "warn" : "success";
 
   return (
-    <div className="space-y-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-ink">Dashboard</h1>
-          <p className="mt-1 text-sm text-muted">
-            Everything at a glance — vault, notes, tasks and income.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={async () => setFs(await toggleFullscreen())}
-            title={fs ? "Exit full screen" : "Full screen"}
-            aria-label={fs ? "Exit full screen" : "Full screen"}
-            className="grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-white/5 hover:text-ink"
-          >
-            {fs ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </button>
-          <Link
-            to="/generator"
-            className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-          >
-            Generate password
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
-      </header>
+    <div className="space-y-6">
+      <PageHeader
+        title="Dashboard"
+        subtitle="Everything at a glance — vault, notes, tasks and income."
+        actions={
+          <>
+            <IconButton
+              icon={fs ? Minimize2 : Maximize2}
+              label={fs ? "Exit full screen" : "Full screen"}
+              onClick={async () => setFs(await toggleFullscreen())}
+            />
+            <Button
+              variant="primary"
+              icon={ArrowRight}
+              onClick={() => navigate("/generator")}
+            >
+              Generate password
+            </Button>
+          </>
+        }
+      />
 
-      <section className="grid grid-cols-2 gap-4 md:grid-cols-3">
-        {tiles.map(({ label, value, icon: Icon, tone, to }) => (
-          <Link
+      <section className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+        {tiles.map(({ label, value, icon, tone, to }) => (
+          <StatCard
             key={label}
-            to={to}
-            className="rounded-2xl border border-line bg-elevated p-5 transition hover:border-accent/40"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs uppercase tracking-wide text-muted">
-                {label}
-              </span>
-              <Icon className={`h-4 w-4 ${tone}`} />
-            </div>
-            <p className="mt-3 text-2xl font-semibold text-ink">
-              {statsLoading && !stats ? "…" : value}
-            </p>
-          </Link>
+            label={label}
+            value={statsLoading && !stats ? "…" : value}
+            icon={icon}
+            tone={tone}
+            onClick={() => navigate(to)}
+          />
         ))}
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-line bg-elevated p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
-              <ShieldCheck className="h-4 w-4 text-accent" />
-              Vault protection
-            </h2>
-            <span
-              className={cn(
-                "rounded-full border px-2 py-0.5 text-[11px] font-medium",
-                statusTone,
-              )}
-            >
-              {statusLabel}
-            </span>
-          </div>
-
+        <Card padding="lg">
+          <CardHeader
+            icon={ShieldCheck}
+            title="Vault protection"
+            action={<Badge tone={statusTone}>{statusLabel}</Badge>}
+          />
           <div className="flex items-center gap-3">
             <div
               className={cn(
                 "grid h-11 w-11 place-items-center rounded-xl",
-                locked
-                  ? "bg-amber-500/15 text-amber-300"
-                  : "bg-accent-soft text-accent",
+                locked ? "bg-warn-soft text-warn" : "bg-accent-soft text-accent",
               )}
             >
               {locked ? <Lock className="h-5 w-5" /> : <Unlock className="h-5 w-5" />}
             </div>
-            <div>
-              <p className="text-2xl font-semibold text-ink">{vaultCount}</p>
-              <p className="text-xs text-muted">items in vault</p>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-ink">
+                {locked ? "Vault is locked" : "Vault is unlocked"}
+              </p>
+              <p className="text-xs text-muted">Encrypted at rest, decrypted in memory only.</p>
             </div>
           </div>
 
           <ul className="mt-4 space-y-1.5">
             {PROTECTION.map((p) => (
               <li key={p.label} className="flex items-center gap-2 text-xs text-muted">
-                <Check className="h-3.5 w-3.5 text-emerald-400" />
+                <Check className="h-3.5 w-3.5 text-success" />
                 {p.label}
               </li>
             ))}
           </ul>
-        </section>
+        </Card>
 
         <WorldClock />
       </div>
 
-      <section className="rounded-2xl border border-line bg-elevated p-6">
-        <div className="mb-4 flex items-center justify-between">
+      <Card padding="none">
+        <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
-            <KeyRound className="h-4 w-4 text-accent" />
+            <KeyRound className="h-4 w-4 text-muted" />
             Recent credentials
           </h2>
-          <Link to="/vault" className="text-xs text-muted transition hover:text-ink">
+          <Link
+            to="/vault"
+            className="text-xs text-muted transition-colors hover:text-ink"
+          >
             View all
           </Link>
         </div>
         {recentCredentials.length === 0 ? (
-          <EmptyState
-            icon={KeyRound}
-            title="No credentials yet"
-            hint="Items you save will show up here."
-          />
+          <div className="p-4">
+            <EmptyState
+              icon={KeyRound}
+              title="No credentials yet"
+              hint="Items you save will show up here."
+            />
+          </div>
         ) : (
-          <ul className="space-y-2">
+          <ul>
             {recentCredentials.map((item) => (
-              <li key={item.id}>
+              <li key={item.id} className="border-b border-line last:border-0">
                 <button
                   type="button"
                   onClick={() => navigate("/vault")}
-                  className="flex w-full items-center gap-3 rounded-xl border border-line bg-surface/60 px-3 py-2.5 text-left transition hover:border-accent/40"
+                  className="group flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-raised"
                 >
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent-soft text-xs font-semibold text-ink">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent-soft text-xs font-semibold text-accent-strong">
                     {initials(item.title)}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm text-ink">
-                      {item.title}
-                    </span>
+                    <span className="block truncate text-sm text-ink">{item.title}</span>
                     <span className="block truncate text-xs text-muted">
                       {item.username || "—"}
                     </span>
                   </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-faint opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
                 </button>
               </li>
             ))}
           </ul>
         )}
-      </section>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-line bg-elevated p-6">
-          <div className="mb-4 flex items-center justify-between">
+        <Card padding="none">
+          <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
-              <CalendarClock className="h-4 w-4 text-accent" />
+              <CalendarClock className="h-4 w-4 text-muted" />
               Upcoming tasks
             </h2>
             <Link
               to="/tasks"
-              className="text-xs text-muted transition hover:text-ink"
+              className="text-xs text-muted transition-colors hover:text-ink"
             >
               View all
             </Link>
           </div>
           {upcoming.length === 0 ? (
-            <EmptyState
-              icon={ListChecks}
-              title="No upcoming tasks"
-              hint="Tasks with a due date will appear here."
-            />
+            <div className="p-4">
+              <EmptyState
+                icon={CalendarClock}
+                title="No upcoming tasks"
+                hint="Tasks with a due date will appear here."
+              />
+            </div>
           ) : (
-            <ul className="space-y-2">
+            <ul>
               {upcoming.map((task) => (
                 <li
                   key={task.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface/60 px-3 py-2.5"
+                  className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5 last:border-0"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm text-ink">{task.title}</p>
@@ -325,57 +334,65 @@ export default function DashboardPage() {
                       {task.dueDate ? formatDate(task.dueDate) : "No due date"}
                     </p>
                   </div>
-                  <span className="shrink-0 rounded-full border border-line px-2 py-0.5 text-[11px] text-muted">
+                  <Badge tone={taskTone(task.status)}>
                     {task.status.replace("_", " ")}
-                  </span>
+                  </Badge>
                 </li>
               ))}
             </ul>
           )}
-        </section>
+        </Card>
 
-        <section className="rounded-2xl border border-line bg-elevated p-6">
-          <div className="mb-4 flex items-center justify-between">
+        <Card padding="none">
+          <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
-              <ListChecks className="h-4 w-4 text-accent" />
+              <ActivityIcon className="h-4 w-4 text-muted" />
               Recent activity
             </h2>
             <Link
               to="/activity"
-              className="text-xs text-muted transition hover:text-ink"
+              className="text-xs text-muted transition-colors hover:text-ink"
             >
               View all
             </Link>
           </div>
           {activity.length === 0 ? (
-            <EmptyState
-              icon={ListChecks}
-              title="Nothing yet"
-              hint="Your recent changes will show up here."
-            />
+            <div className="p-4">
+              <EmptyState
+                icon={ActivityIcon}
+                title="Nothing yet"
+                hint="Your recent changes will show up here."
+              />
+            </div>
           ) : (
-            <ul className="space-y-2">
-              {activity.map((entry) => (
-                <li
-                  key={entry.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface/60 px-3 py-2.5"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm text-ink">
-                      {entry.itemName || entry.module}
-                    </p>
-                    <p className="text-xs text-muted">
-                      {entry.module} · {entry.action}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-[11px] text-muted">
-                    {formatRelative(entry.createdAt)}
-                  </span>
-                </li>
-              ))}
+            <ul>
+              {activity.map((entry) => {
+                const Icon = ACTIVITY_ICONS[entry.module] ?? ActivityIcon;
+                return (
+                  <li
+                    key={entry.id}
+                    className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5 last:border-0"
+                  >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <Icon className="h-4 w-4 shrink-0 text-muted" />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm text-ink">
+                          {entry.itemName || entry.module}
+                        </p>
+                        <p className="truncate text-xs text-muted">
+                          {entry.module} · {entry.action}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-[11px] text-muted">
+                      {formatRelative(entry.createdAt)}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
-        </section>
+        </Card>
       </div>
     </div>
   );

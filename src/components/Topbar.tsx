@@ -1,11 +1,18 @@
-// QVAULT — top bar: search + lock (SPEC §5 B4).
-import { useState } from "react";
+// QVAULT — top bar (Calm Precision).
+// Search sebelumnya adalah input mati (state tak pernah dipakai). Sekarang ia
+// adalah tombol yang membuka Command Palette sungguhan via event global.
 import { useNavigate } from "react-router-dom";
 import { Lock, Search } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 
+/** Nama event global untuk membuka Command Palette dari mana saja. */
+export const OPEN_PALETTE_EVENT = "qvault:open-palette";
+
+function isMac() {
+  return typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+}
+
 export default function Topbar() {
-  const [query, setQuery] = useState("");
   const navigate = useNavigate();
   const lock = useAuthStore((s) => s.lock);
 
@@ -18,20 +25,23 @@ export default function Topbar() {
   }
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-4 border-b border-line bg-surface/80 px-6 backdrop-blur">
-      <div className="relative flex-1 max-w-md">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search…"
-          className="w-full rounded-xl border border-line bg-elevated/60 py-2 pl-9 pr-3 text-sm text-ink outline-none transition placeholder:text-muted focus:border-accent"
-        />
-      </div>
+    <header className="flex h-14 shrink-0 items-center gap-4 border-b border-line bg-surface px-6">
+      <button
+        type="button"
+        onClick={() => window.dispatchEvent(new CustomEvent(OPEN_PALETTE_EVENT))}
+        className="group flex h-9 w-full max-w-sm items-center gap-2.5 rounded-lg border border-line bg-elevated px-3 text-sm text-faint transition-colors duration-150 hover:border-line-strong hover:text-muted"
+      >
+        <Search className="h-4 w-4" />
+        <span className="flex-1 text-left">Search vault, notes, tasks…</span>
+        <kbd className="rounded border border-line bg-surface px-1.5 py-0.5 text-[10px] font-medium text-faint">
+          {isMac() ? "⌘" : "Ctrl"} K
+        </kbd>
+      </button>
+
       <button
         type="button"
         onClick={handleLock}
-        className="ml-auto inline-flex items-center gap-2 rounded-xl border border-line px-3 py-2 text-sm text-muted transition hover:text-ink"
+        className="ml-auto inline-flex h-9 items-center gap-2 rounded-lg border border-line bg-elevated px-3 text-sm text-muted transition-colors duration-150 hover:border-line-strong hover:text-ink"
       >
         <Lock className="h-4 w-4" />
         Lock

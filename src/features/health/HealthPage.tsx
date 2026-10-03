@@ -1,13 +1,23 @@
 // QVAULT — Password Health (route "/health", Wave 4 / Agent C).
 // Analisis kekuatan password dari data vault yang SUDAH didekripsi (useVaultStore.items).
 // Tidak butuh backend: semua hitungan dilakukan lokal dari item.password/username/title/updatedAt/url.
-// UI bahasa Inggris, komentar bahasa Indonesia.
+// UI bahasa Inggris, komentar bahasa Indonesia. Lapisan tampilan saja — logika identik.
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Copy, KeyRound, Lock, RefreshCw, ShieldAlert } from "lucide-react";
 import { useVaultStore } from "../../store/useVaultStore";
 import { cn, formatDate, parseDate, passwordStrength } from "../../lib/utils";
 import EmptyState from "../../components/EmptyState";
+import {
+  Button,
+  Card,
+  CardHeader,
+  PageHeader,
+  RowActions,
+  StatCard,
+  Tabs,
+  type Tone,
+} from "../../components/ui";
 import type { VaultItem } from "../../lib/types";
 
 /** Ambang item dianggap basi: 180 hari sejak updatedAt. */
@@ -96,11 +106,11 @@ const TABS: TabDef[] = [
   { key: "no2fa", label: "No 2FA", hint: "Items without a TOTP secret." },
 ];
 
-/** Tone warna untuk skor total. */
+/** Tone semantik untuk skor total (satu warna = satu makna). */
 function scoreTone(score: number): { text: string; bar: string } {
-  if (score >= 80) return { text: "text-emerald-400", bar: "bg-emerald-500" };
-  if (score >= 50) return { text: "text-amber-400", bar: "bg-amber-500" };
-  return { text: "text-red-400", bar: "bg-red-500" };
+  if (score >= 80) return { text: "text-success", bar: "bg-success" };
+  if (score >= 50) return { text: "text-warn", bar: "bg-warn" };
+  return { text: "text-danger", bar: "bg-danger" };
 }
 
 export default function HealthPage() {
@@ -162,48 +172,58 @@ export default function HealthPage() {
     no2fa: report.no2fa.length,
   };
 
-  const stats = [
-    { label: "Total", value: report.total, icon: KeyRound, tone: "text-accent" },
-    { label: "Weak", value: report.weak.length, icon: ShieldAlert, tone: "text-red-400" },
-    { label: "Reused", value: report.reused.length, icon: Copy, tone: "text-amber-400" },
-    { label: "Stale", value: report.stale.length, icon: RefreshCw, tone: "text-sky-400" },
+  const stats: { label: string; value: number; icon: typeof KeyRound; tone: Tone }[] = [
+    { label: "Total", value: report.total, icon: KeyRound, tone: "accent" },
+    { label: "Weak", value: report.weak.length, icon: ShieldAlert, tone: "danger" },
+    { label: "Reused", value: report.reused.length, icon: Copy, tone: "warn" },
+    { label: "Stale", value: report.stale.length, icon: RefreshCw, tone: "info" },
   ];
 
   return (
-    <div className="space-y-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-ink">Password health</h1>
-          <p className="mt-1 text-sm text-muted">
-            Find weak, reused, stale and missing credentials — and logins without 2FA.
-          </p>
-        </div>
-      </header>
+    <div className="space-y-6">
+      <PageHeader
+        title="Password health"
+        subtitle="Find weak, reused, stale and missing credentials — and logins without 2FA."
+      />
 
       {report.total === 0 ? (
         <EmptyState
           icon={ShieldAlert}
           title={loading ? "Loading vault…" : "No credentials to analyze"}
           hint="Add items to your vault and their health will be reviewed here."
+          action={
+            <Button
+              variant="primary"
+              icon={KeyRound}
+              onClick={() => navigate("/vault")}
+            >
+              Go to vault
+            </Button>
+          }
         />
       ) : (
         <>
           {/* Kartu skor total + 4 stat ringkasan. */}
           <section className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-2xl border border-line bg-elevated p-6">
+            <Card padding="lg" className="flex flex-col justify-between">
               <div className="flex items-center justify-between">
-                <span className="text-xs uppercase tracking-wide text-muted">
+                <span className="text-xs font-medium text-muted">
                   Overall health
                 </span>
                 <ShieldAlert className={cn("h-4 w-4", tone.text)} />
               </div>
               <div className="mt-3 flex items-end gap-2">
-                <span className={cn("text-4xl font-semibold", tone.text)}>
+                <span
+                  className={cn(
+                    "text-2xl font-semibold tracking-tight tabular-nums",
+                    tone.text,
+                  )}
+                >
                   {report.score}
                 </span>
-                <span className="pb-1 text-sm text-muted">/ 100</span>
+                <span className="pb-0.5 text-sm text-muted">/ 100</span>
               </div>
-              <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-white/10">
+              <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-raised">
                 <div
                   className={cn("h-full rounded-full transition-all", tone.bar)}
                   style={{ width: `${report.score}%` }}
@@ -212,51 +232,37 @@ export default function HealthPage() {
               <p className="mt-2 text-xs text-muted">
                 {report.healthy} of {report.total} items are healthy.
               </p>
-            </div>
+            </Card>
 
             <div className="grid grid-cols-2 gap-4">
-              {stats.map(({ label, value, icon: Icon, tone: t }) => (
-                <div
+              {stats.map(({ label, value, icon, tone: t }) => (
+                <StatCard
                   key={label}
-                  className="rounded-2xl border border-line bg-elevated p-5"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs uppercase tracking-wide text-muted">
-                      {label}
-                    </span>
-                    <Icon className={cn("h-4 w-4", t)} />
-                  </div>
-                  <p className="mt-3 text-2xl font-semibold text-ink">{value}</p>
-                </div>
+                  label={label}
+                  value={value}
+                  icon={icon}
+                  tone={t}
+                />
               ))}
             </div>
           </section>
 
           {/* Daftar masalah per kategori (tab). */}
-          <section className="rounded-2xl border border-line bg-elevated p-6">
-            <div className="mb-4 flex flex-wrap gap-2">
-              {TABS.map((t) => {
-                const active = t.key === tab;
-                return (
-                  <button
-                    key={t.key}
-                    type="button"
-                    onClick={() => setTab(t.key)}
-                    className={cn(
-                      "inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-sm transition",
-                      active
-                        ? "border-accent/50 bg-accent-soft text-ink"
-                        : "border-line text-muted hover:text-ink",
-                    )}
-                  >
-                    {t.label}
-                    <span className="rounded-full bg-white/10 px-1.5 text-[11px] text-muted">
-                      {counts[t.key]}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+          <Card padding="lg">
+            <CardHeader
+              title={activeDef.label}
+              action={
+                <Tabs
+                  items={TABS.map((t) => ({
+                    value: t.key,
+                    label: t.label,
+                    count: counts[t.key],
+                  }))}
+                  value={tab}
+                  onChange={(v) => setTab(v as TabKey)}
+                />
+              }
+            />
 
             <p className="mb-4 text-xs text-muted">{activeDef.hint}</p>
 
@@ -267,35 +273,35 @@ export default function HealthPage() {
                 hint="No items in this category. Nice work."
               />
             ) : (
-              <ul className="space-y-2">
+              <div className="-mx-5 -mb-5">
                 {activeList.map((item) => (
-                  <li
+                  <div
                     key={item.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface/60 px-3 py-2.5"
+                    className="group flex items-center gap-3 border-t border-line px-5 py-2.5 transition-colors hover:bg-raised"
                   >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent-soft text-muted">
-                        <Lock className="h-3.5 w-3.5" />
-                      </span>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm text-ink">{item.title}</p>
-                        <p className="truncate text-xs text-muted">
-                          {item.username || "—"} · {detailFor(item)}
-                        </p>
-                      </div>
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent-soft text-muted">
+                      <Lock className="h-3.5 w-3.5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm text-ink">{item.title}</p>
+                      <p className="truncate text-xs text-muted">
+                        {item.username || "—"} · {detailFor(item)}
+                      </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => navigate("/vault")}
-                      className="shrink-0 rounded-lg border border-line px-3 py-1.5 text-xs text-muted transition hover:border-accent/40 hover:text-ink"
-                    >
-                      Fix in vault
-                    </button>
-                  </li>
+                    <RowActions>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => navigate("/vault")}
+                      >
+                        Fix in vault
+                      </Button>
+                    </RowActions>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
-          </section>
+          </Card>
         </>
       )}
     </div>

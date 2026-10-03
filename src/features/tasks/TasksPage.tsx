@@ -1,4 +1,4 @@
-// QVAULT — Tasks page. Uses useTasksStore (+ dashboard stats) + shared UI (FINAL-CONTRACT B/C/D).
+// QVAULT — Tasks page. Uses useTasksStore (+ dashboard stats) + shared UI (Calm Precision).
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   CheckCircle2,
@@ -9,23 +9,31 @@ import {
   Pencil,
   Plus,
   RefreshCw,
-  Search,
   Trash2,
 } from "lucide-react";
 
 import EmptyState from "../../components/EmptyState";
 import Modal from "../../components/Modal";
 import { useToast } from "../../components/Toast";
+import {
+  Badge,
+  Button,
+  Card,
+  Field,
+  IconButton,
+  Input,
+  Menu,
+  PageHeader,
+  RowActions,
+  SearchInput,
+  StatCard,
+  Tabs,
+  type Tone,
+} from "../../components/ui";
 import { useFoldersStore } from "../../store/useFoldersStore";
 import { useTasksStore } from "../../store/useTasksStore";
 import type { Task, TaskPayload, TaskStatus } from "../../lib/types";
 import { cn, formatDate, parseTags, toDateInput } from "../../lib/utils";
-
-const inputCls =
-  "w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none transition focus:border-accent";
-const labelCls = "mb-1 block text-xs font-medium text-muted";
-const iconBtnCls =
-  "grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-white/5 hover:text-ink";
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   todo: "To do",
@@ -43,6 +51,18 @@ const NEXT_STATUS: Record<TaskStatus, TaskStatus> = {
   done: "todo",
 };
 
+/** Priority → semantic tone (satu warna = satu makna). */
+function priorityTone(priority: string): Tone {
+  switch (priority.toLowerCase()) {
+    case "high":
+      return "danger";
+    case "low":
+      return "success";
+    default:
+      return "warn";
+  }
+}
+
 const EMPTY_FORM: TaskPayload = {
   title: "",
   description: "",
@@ -52,24 +72,6 @@ const EMPTY_FORM: TaskPayload = {
   tags: [],
   folderId: null,
 };
-
-function priorityClass(priority: string): string {
-  switch (priority.toLowerCase()) {
-    case "high":
-      return "border-red-500/30 bg-red-500/15 text-red-300";
-    case "low":
-      return "border-emerald-500/30 bg-emerald-500/15 text-emerald-300";
-    default:
-      return "border-amber-500/30 bg-amber-500/15 text-amber-300";
-  }
-}
-
-const TABS: { key: "all" | TaskStatus; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "todo", label: "To do" },
-  { key: "in_progress", label: "In progress" },
-  { key: "done", label: "Done" },
-];
 
 export default function TasksPage() {
   const toast = useToast();
@@ -202,92 +204,78 @@ export default function TasksPage() {
     }
   }
 
-  const summary = [
-    { label: "Due today", value: stats?.tasksToday ?? 0 },
-    { label: "Overdue", value: stats?.tasksOverdue ?? 0 },
-    { label: "Completed", value: stats?.tasksDone ?? 0 },
-  ];
-
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-ink">Tasks</h1>
-          <p className="text-xs text-muted">
-            {filtered.length} of {items.length} task
-            {items.length === 1 ? "" : "s"}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              void load();
-              void loadStats();
-            }}
-            className="grid h-9 w-9 place-items-center rounded-xl border border-line text-muted transition hover:text-ink"
-            aria-label="Refresh"
-          >
-            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-          </button>
-          <button
-            type="button"
-            onClick={openCreate}
-            className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-          >
-            <Plus className="h-4 w-4" /> New task
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Tasks"
+        subtitle={`${filtered.length} of ${items.length} task${items.length === 1 ? "" : "s"}`}
+        actions={
+          <>
+            <IconButton
+              icon={RefreshCw}
+              label="Refresh"
+              onClick={() => {
+                void load();
+                void loadStats();
+              }}
+              className={cn(loading && "[&>svg]:animate-spin")}
+            />
+            <Button variant="primary" icon={Plus} onClick={openCreate}>
+              New task
+            </Button>
+          </>
+        }
+      />
 
       <div
         className={cn(
-          "grid grid-cols-3 gap-3 transition",
+          "grid grid-cols-1 gap-4 sm:grid-cols-3 transition-opacity",
           statsLoading && "opacity-60",
         )}
       >
-        {summary.map((s) => (
-          <div
-            key={s.label}
-            className="rounded-2xl border border-line bg-elevated px-4 py-3"
-          >
-            <p className="text-lg font-bold text-ink">{s.value}</p>
-            <p className="text-xs text-muted">{s.label}</p>
-          </div>
-        ))}
+        <StatCard
+          label="Due today"
+          value={stats?.tasksToday ?? 0}
+          icon={Clock}
+          tone="info"
+        />
+        <StatCard
+          label="Overdue"
+          value={stats?.tasksOverdue ?? 0}
+          icon={Circle}
+          tone="danger"
+        />
+        <StatCard
+          label="Completed"
+          value={stats?.tasksDone ?? 0}
+          icon={CheckCircle2}
+          tone="success"
+        />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap gap-1 rounded-xl border border-line bg-elevated p-1">
-          {TABS.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setFilter(tab.key)}
-              className={cn(
-                "rounded-lg px-3 py-1.5 text-xs font-medium transition",
-                filter === tab.key
-                  ? "bg-accent text-white"
-                  : "text-muted hover:text-ink",
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        <div className="relative min-w-[200px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-          <input
+      <div className="flex flex-wrap items-center gap-3">
+        <Tabs
+          items={[
+            { value: "all", label: "All" },
+            { value: "todo", label: "To do" },
+            { value: "in_progress", label: "In progress" },
+            { value: "done", label: "Done" },
+          ]}
+          value={filter}
+          onChange={(v) => setFilter(v as "all" | TaskStatus)}
+        />
+        <div className="min-w-[200px] flex-1">
+          <SearchInput
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search tasks…"
-            className="w-full rounded-xl border border-line bg-surface py-2.5 pl-9 pr-3 text-sm text-ink outline-none transition focus:border-accent"
+            aria-label="Search tasks"
           />
         </div>
       </div>
 
       {error && (
-        <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-xs text-red-300">
+        <p className="rounded-xl border border-danger/40 bg-danger-soft px-4 py-2 text-xs text-danger">
           {error}
         </p>
       )}
@@ -301,104 +289,106 @@ export default function TasksPage() {
           icon={ListChecks}
           title="No tasks"
           hint="Add a task to start tracking what needs doing."
+          action={
+            <Button variant="secondary" icon={Plus} onClick={openCreate}>
+              New task
+            </Button>
+          }
         />
       ) : (
-        <ul className="space-y-2">
-          {filtered.map((task) => {
-            const StatusIcon = STATUS_ICON[task.status];
-            const overdue = isOverdue(task);
-            return (
-              <li
-                key={task.id}
-                className="flex items-center gap-3 rounded-2xl border border-line bg-elevated px-4 py-3"
-              >
-                <button
-                  type="button"
-                  onClick={() => void onCycle(task)}
-                  className={cn(
-                    "grid h-8 w-8 shrink-0 place-items-center rounded-full border transition",
-                    task.status === "done"
-                      ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
-                      : "border-line text-muted hover:text-ink",
-                  )}
-                  aria-label="Cycle status"
-                  title={`Status: ${STATUS_LABEL[task.status]}`}
+        <Card padding="none">
+          <ul>
+            {filtered.map((task) => {
+              const StatusIcon = STATUS_ICON[task.status];
+              const overdue = isOverdue(task);
+              const done = task.status === "done";
+              return (
+                <li
+                  key={task.id}
+                  className="group flex items-center gap-3 border-b border-line px-4 py-2.5 transition-colors last:border-0 hover:bg-raised"
                 >
-                  <StatusIcon className="h-4 w-4" />
-                </button>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p
-                      className={cn(
-                        "truncate text-sm font-medium",
-                        task.status === "done"
-                          ? "text-muted line-through"
-                          : "text-ink",
-                      )}
-                    >
-                      {task.title}
-                    </p>
-                    <span
-                      className={cn(
-                        "shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] uppercase tracking-wide",
-                        priorityClass(task.priority),
-                      )}
-                    >
-                      {task.priority}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-                    {task.dueDate && (
-                      <span className={cn(overdue && "text-red-400")}>
-                        {overdue ? "Overdue · " : "Due "}
-                        {formatDate(task.dueDate)}
-                      </span>
+                  <button
+                    type="button"
+                    onClick={() => void onCycle(task)}
+                    className={cn(
+                      "grid h-7 w-7 shrink-0 place-items-center rounded-full border transition-colors",
+                      done
+                        ? "border-success/40 bg-success-soft text-success"
+                        : "border-line text-muted hover:border-line-strong hover:text-ink",
                     )}
-                    {task.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] text-ink"
+                    aria-label={`Status: ${STATUS_LABEL[task.status]}. Change status`}
+                    title={`Status: ${STATUS_LABEL[task.status]}`}
+                  >
+                    <StatusIcon className="h-3.5 w-3.5" />
+                  </button>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p
+                        className={cn(
+                          "truncate text-sm font-medium",
+                          done ? "text-muted line-through" : "text-ink",
+                        )}
                       >
-                        {tag}
-                      </span>
-                    ))}
-                    {task.folderId && folderName.get(task.folderId) && (
-                      <span>· {folderName.get(task.folderId)}</span>
-                    )}
+                        {task.title}
+                      </p>
+                      <Badge tone={priorityTone(task.priority)}>
+                        {task.priority}
+                      </Badge>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                      {task.dueDate && (
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1",
+                            overdue && "text-danger",
+                          )}
+                        >
+                          {overdue ? "Overdue · " : "Due "}
+                          {formatDate(task.dueDate)}
+                        </span>
+                      )}
+                      {task.tags
+                        .filter((tag) => tag.toLowerCase() !== "task")
+                        .map((tag) => (
+                          <Badge key={tag} tone="neutral">
+                            {tag}
+                          </Badge>
+                        ))}
+                      {task.folderId && folderName.get(task.folderId) && (
+                        <span>· {folderName.get(task.folderId)}</span>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                <span className="hidden shrink-0 rounded-md bg-white/5 px-2 py-0.5 text-[11px] text-muted sm:inline">
-                  {STATUS_LABEL[task.status]}
-                </span>
+                  {busyId === task.id && (
+                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted" />
+                  )}
 
-                <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => openEdit(task)}
-                    className={iconBtnCls}
-                    aria-label="Edit"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void onDelete(task)}
-                    className={cn(iconBtnCls, "hover:text-red-400")}
-                    aria-label="Delete"
-                  >
-                    {busyId === task.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                  <RowActions className="shrink-0">
+                    <IconButton
+                      icon={Pencil}
+                      label="Edit task"
+                      onClick={() => openEdit(task)}
+                    />
+                    <Menu
+                      label="More actions"
+                      items={[
+                        {
+                          label: "Delete",
+                          icon: Trash2,
+                          onClick: () => void onDelete(task),
+                          danger: true,
+                          disabled: busyId === task.id,
+                        },
+                      ]}
+                    />
+                  </RowActions>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
       )}
 
       <Modal
@@ -407,82 +397,73 @@ export default function TasksPage() {
         title={editing ? "Edit task" : "New task"}
       >
         <form onSubmit={onSubmit} className="space-y-3">
-          <div>
-            <label className={labelCls}>Title</label>
-            <input
+          <Field label="Title">
+            <Input
               value={form.title}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, title: e.target.value }))
-              }
-              className={inputCls}
+              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
               placeholder="What needs doing?"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className={labelCls}>Description</label>
+          <Field label="Description">
             <textarea
               value={form.description}
               onChange={(e) =>
                 setForm((f) => ({ ...f, description: e.target.value }))
               }
               rows={3}
-              className={inputCls}
+              className="field"
               placeholder="Optional details…"
             />
-          </div>
+          </Field>
 
           <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className={labelCls}>Status</label>
+            <Field label="Status">
               <select
                 value={form.status}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, status: e.target.value as TaskStatus }))
                 }
-                className={inputCls}
+                className="field"
               >
                 <option value="todo">To do</option>
                 <option value="in_progress">In progress</option>
                 <option value="done">Done</option>
               </select>
-            </div>
-            <div>
-              <label className={labelCls}>Priority</label>
+            </Field>
+            <Field label="Priority">
               <select
                 value={form.priority}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, priority: e.target.value }))
                 }
-                className={inputCls}
+                className="field"
               >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
               </select>
-            </div>
-            <div>
-              <label className={labelCls}>Due date</label>
+            </Field>
+            <Field label="Due date">
               <input
                 type="date"
                 value={toDateInput(form.dueDate)}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, dueDate: e.target.value || null }))
                 }
-                className={inputCls}
+                className="field"
               />
-            </div>
+            </Field>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Folder</label>
+            <Field label="Folder">
               <select
                 value={form.folderId ?? ""}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, folderId: e.target.value || null }))
                 }
-                className={inputCls}
+                className="field"
               >
                 <option value="">No folder</option>
                 {folders.map((f) => (
@@ -491,34 +472,24 @@ export default function TasksPage() {
                   </option>
                 ))}
               </select>
-            </div>
-            <div>
-              <label className={labelCls}>Tags (comma separated)</label>
-              <input
+            </Field>
+            <Field label="Tags (comma separated)">
+              <Input
                 value={tagsText}
                 onChange={(e) => setTagsText(e.target.value)}
-                className={inputCls}
                 placeholder="urgent, home"
               />
-            </div>
+            </Field>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="rounded-xl border border-line px-4 py-2 text-sm text-muted transition hover:text-ink"
-            >
+            <Button variant="ghost" onClick={() => setOpen(false)}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-            >
+            </Button>
+            <Button type="submit" variant="primary" disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               {editing ? "Save changes" : "Create task"}
-            </button>
+            </Button>
           </div>
         </form>
       </Modal>

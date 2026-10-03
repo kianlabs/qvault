@@ -1,6 +1,7 @@
 // QVAULT — Activity (route "/activity"). Timeline from useActivityStore with
 // module filtering and a confirm-gated clear.
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+// UI overhaul: "Calm Precision" design system (presentation only — no logic change).
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity as ActivityIcon,
   CheckCircle2,
@@ -11,7 +12,6 @@ import {
   RefreshCw,
   Settings as SettingsIcon,
   ShieldCheck,
-  Trash2,
   TrendingUp,
 } from "lucide-react";
 import { useActivityStore } from "../../store/useActivityStore";
@@ -19,6 +19,14 @@ import { useToast } from "../../components/Toast";
 import EmptyState from "../../components/EmptyState";
 import Modal from "../../components/Modal";
 import { cn, formatDateTime, formatRelative } from "../../lib/utils";
+import {
+  Badge,
+  Button,
+  Card,
+  PageHeader,
+  Tabs,
+  type Tone,
+} from "../../components/ui";
 import type { ActivityEntry } from "../../lib/types";
 import type { LucideIcon } from "lucide-react";
 
@@ -32,13 +40,14 @@ const MODULE_ICONS: Record<string, LucideIcon> = {
   settings: SettingsIcon,
 };
 
-const TONES: Record<string, string> = {
-  create: "text-emerald-400",
-  update: "text-sky-400",
-  delete: "text-red-400",
-  init: "text-accent",
-  unlock: "text-accent",
-  lock: "text-amber-400",
+/** Satu aksi = satu makna warna (Calm Precision). */
+const ACTION_TONES: Record<string, Tone> = {
+  create: "success",
+  update: "info",
+  delete: "danger",
+  init: "accent",
+  unlock: "accent",
+  lock: "warn",
 };
 
 export default function ActivityPage() {
@@ -62,9 +71,23 @@ export default function ActivityPage() {
     return Array.from(set).sort();
   }, [items]);
 
+  const counts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const e of items) map.set(e.module, (map.get(e.module) ?? 0) + 1);
+    return map;
+  }, [items]);
+
   const filtered = useMemo(
     () => (module === "all" ? items : items.filter((e) => e.module === module)),
     [items, module],
+  );
+
+  const tabs = useMemo(
+    () => [
+      { value: "all", label: "All", count: items.length },
+      ...modules.map((m) => ({ value: m, label: m, count: counts.get(m) ?? 0 })),
+    ],
+    [modules, counts, items.length],
   );
 
   async function onClear() {
@@ -80,50 +103,38 @@ export default function ActivityPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-ink">Activity</h1>
-          <p className="mt-1 text-sm text-muted">
-            A local audit trail of everything that changes in your vault.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void load(200)}
-            className="inline-flex items-center gap-2 rounded-xl border border-line px-3 py-2 text-sm text-muted transition hover:text-ink"
-          >
-            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-            Refresh
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirming(true)}
-            disabled={items.length === 0}
-            className="inline-flex items-center gap-2 rounded-xl border border-line px-3 py-2 text-sm text-muted transition hover:border-red-500/40 hover:text-red-300 disabled:opacity-50"
-          >
-            <Trash2 className="h-4 w-4" />
-            Clear
-          </button>
-        </div>
-      </header>
+      <PageHeader
+        title="Activity"
+        subtitle="A local audit trail of everything that changes in your vault."
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              icon={RefreshCw}
+              onClick={() => void load(200)}
+              disabled={loading}
+            >
+              Refresh
+            </Button>
+            <Button
+              variant="danger"
+              icon={ActivityIcon}
+              onClick={() => setConfirming(true)}
+              disabled={items.length === 0}
+            >
+              Clear
+            </Button>
+          </>
+        }
+      />
 
       {error && (
-        <p className="rounded-xl border border-red-500/40 bg-red-500/5 px-4 py-2 text-sm text-red-300">
+        <p className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-2 text-sm text-danger">
           {error}
         </p>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        <FilterChip active={module === "all"} onClick={() => setModule("all")}>
-          All
-        </FilterChip>
-        {modules.map((m) => (
-          <FilterChip key={m} active={module === m} onClick={() => setModule(m)}>
-            {m}
-          </FilterChip>
-        ))}
-      </div>
+      <Tabs items={tabs} value={module} onChange={setModule} />
 
       {filtered.length === 0 ? (
         <EmptyState
@@ -132,11 +143,13 @@ export default function ActivityPage() {
           hint="Actions like creating or editing items will be logged here."
         />
       ) : (
-        <ol className="relative space-y-2 border-l border-line pl-6">
-          {filtered.map((entry) => (
-            <TimelineRow key={entry.id} entry={entry} />
-          ))}
-        </ol>
+        <Card padding="none">
+          <ul>
+            {filtered.map((entry) => (
+              <TimelineRow key={entry.id} entry={entry} />
+            ))}
+          </ul>
+        </Card>
       )}
 
       <Modal
@@ -149,74 +162,39 @@ export default function ActivityPage() {
           be undone.
         </p>
         <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => setConfirming(false)}
-            className="rounded-xl border border-line px-4 py-2 text-sm text-muted transition hover:text-ink"
-          >
+          <Button variant="secondary" onClick={() => setConfirming(false)}>
             Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onClear}
-            className="rounded-xl bg-red-500 px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-          >
+          </Button>
+          <Button variant="danger" onClick={onClear}>
             Clear log
-          </button>
+          </Button>
         </div>
       </Modal>
     </div>
   );
 }
 
-function FilterChip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "rounded-xl border px-3 py-1.5 text-sm capitalize transition",
-        active
-          ? "border-accent bg-accent-soft text-ink"
-          : "border-line text-muted hover:text-ink",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
 function TimelineRow({ entry }: { entry: ActivityEntry }) {
   const Icon = MODULE_ICONS[entry.module] ?? CheckCircle2;
-  const tone = TONES[entry.action] ?? "text-muted";
+  const tone = ACTION_TONES[entry.action] ?? "neutral";
   return (
-    <li className="relative rounded-xl border border-line bg-elevated px-4 py-3">
-      <span className="absolute -left-[31px] top-4 grid h-5 w-5 place-items-center rounded-full border border-line bg-surface">
-        <Icon className={cn("h-3 w-3", tone)} />
+    <li className="flex items-center gap-3 border-b border-line px-4 py-2.5 last:border-0 hover:bg-raised">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-line bg-raised text-muted">
+        <Icon className="h-4 w-4" />
       </span>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-ink">
-          <span className="font-medium">{entry.action}</span>
-          {entry.itemName && (
-            <span className="text-muted"> · {entry.itemName}</span>
-          )}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm text-ink">
+          {entry.itemName || entry.module}
         </p>
-        <span
-          className="text-xs text-muted"
-          title={formatDateTime(entry.createdAt)}
-        >
-          {formatRelative(entry.createdAt)}
-        </span>
+        <p className="truncate text-xs capitalize text-muted">{entry.module}</p>
       </div>
-      <p className="mt-0.5 text-xs capitalize text-muted">{entry.module}</p>
+      <Badge tone={tone}>{entry.action}</Badge>
+      <span
+        className={cn("shrink-0 text-[11px] text-muted")}
+        title={formatDateTime(entry.createdAt)}
+      >
+        {formatRelative(entry.createdAt)}
+      </span>
     </li>
   );
 }

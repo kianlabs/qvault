@@ -33,8 +33,8 @@ const ICONS: Record<ToastKind, typeof Info> = {
 };
 
 const TONES: Record<ToastKind, string> = {
-  success: "border-emerald-500/40 text-emerald-300",
-  error: "border-red-500/40 text-red-300",
+  success: "border-success/40 text-success",
+  error: "border-danger/40 text-danger",
   info: "border-line text-muted",
 };
 

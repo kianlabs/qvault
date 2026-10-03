@@ -9,6 +9,7 @@ import { api } from "../lib/api";
 import { secureCopy } from "../lib/clipboard";
 import { useToast } from "./Toast";
 import { cn, errorMessage } from "../lib/utils";
+import { Button, IconButton } from "./ui";
 
 interface Props {
   itemId: string;
@@ -129,45 +130,32 @@ export default function TotpField({ itemId, hasTotp, onChanged }: Props) {
         </div>
 
         {codeError ? (
-          <p className="text-xs text-red-300">{codeError}</p>
+          <p className="text-xs text-danger">{codeError}</p>
         ) : (
           <>
             <div className="flex items-center gap-3">
-              <span className="font-mono text-2xl tracking-widest text-ink">
+              <span className="font-mono text-2xl tracking-widest text-ink tabular-nums">
                 {code ? code.replace(/(\d{3})(\d{3})/, "$1 $2") : "••• •••"}
               </span>
-              <span className="text-xs text-muted">{seconds}s</span>
-              <div className="ml-auto flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => void onCopy()}
-                  aria-label="Copy code"
-                  className="grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-white/5 hover:text-ink"
-                >
-                  <Copy className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void onRemove()}
+              <span className="text-xs text-muted tabular-nums">{seconds}s</span>
+              <div className="ml-auto flex items-center gap-0.5">
+                <IconButton icon={Copy} label="Copy code" onClick={() => void onCopy()} />
+                <IconButton
+                  icon={removing ? Loader2 : Trash2}
+                  label="Remove 2FA"
+                  tone="danger"
                   disabled={removing}
-                  aria-label="Remove 2FA"
-                  className="grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-red-500/10 hover:text-red-300 disabled:opacity-50"
-                >
-                  {removing ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-4 w-4" />
-                  )}
-                </button>
+                  onClick={() => void onRemove()}
+                />
               </div>
             </div>
 
             {/* Progress bar countdown. */}
-            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-raised">
               <div
                 className={cn(
                   "h-full rounded-full transition-[width] duration-1000 ease-linear",
-                  pct > 30 ? "bg-accent" : "bg-amber-400",
+                  pct > 30 ? "bg-accent" : "bg-warn",
                 )}
                 style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
               />
@@ -192,19 +180,18 @@ export default function TotpField({ itemId, hasTotp, onChanged }: Props) {
           value={secret}
           onChange={(e) => setSecret(e.target.value)}
           placeholder="Paste 2FA secret (base32)"
-          className="flex-1 rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink outline-none transition focus:border-accent"
+          className="field flex-1"
         />
-        <button
-          type="button"
-          onClick={() => void onAdd()}
+        <Button
+          variant="primary"
+          icon={adding ? Loader2 : undefined}
           disabled={adding}
-          className="inline-flex items-center gap-2 rounded-xl bg-accent px-3 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+          onClick={() => void onAdd()}
         >
-          {adding && <Loader2 className="h-4 w-4 animate-spin" />}
           Add 2FA
-        </button>
+        </Button>
       </div>
-      {addError && <p className="mt-2 text-xs text-red-300">{addError}</p>}
+      {addError && <p className="mt-2 text-xs text-danger">{addError}</p>}
     </div>
   );
 }

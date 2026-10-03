@@ -1,9 +1,7 @@
-// QVAULT — Folders page. Uses useFoldersStore + shared UI (FINAL-CONTRACT B/C/D).
+// QVAULT — Folders page. Uses useFoldersStore + shared UI (Calm Precision).
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   Folder as FolderIcon,
-  LayoutGrid,
-  List,
   Loader2,
   Pencil,
   Plus,
@@ -15,6 +13,19 @@ import {
 import EmptyState from "../../components/EmptyState";
 import Modal from "../../components/Modal";
 import { useToast } from "../../components/Toast";
+import {
+  Badge,
+  Button,
+  Card,
+  Field,
+  IconButton,
+  Input,
+  Menu,
+  PageHeader,
+  RowActions,
+  Tabs,
+  Toggle,
+} from "../../components/ui";
 import { useFoldersStore } from "../../store/useFoldersStore";
 import { useVaultStore } from "../../store/useVaultStore";
 import { useNotesStore } from "../../store/useNotesStore";
@@ -32,12 +43,6 @@ function readView(): ViewMode {
     return "grid";
   }
 }
-
-const inputCls =
-  "w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none transition focus:border-accent";
-const labelCls = "mb-1 block text-xs font-medium text-muted";
-const iconBtnCls =
-  "grid h-8 w-8 place-items-center rounded-lg text-muted transition hover:bg-white/5 hover:text-ink";
 
 const COLORS = [
   "#7c5cff",
@@ -187,77 +192,45 @@ export default function FoldersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-ink">Folders</h1>
-          <p className="text-xs text-muted">
-            {filtered.length} of {items.length} folder
-            {items.length === 1 ? "" : "s"}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex gap-1 rounded-xl border border-line bg-surface p-1">
-            <button
-              type="button"
-              onClick={() => changeView("grid")}
-              className={cn(
-                "grid h-8 w-8 place-items-center rounded-lg transition",
-                view === "grid" ? "bg-accent text-white" : "text-muted hover:text-ink",
-              )}
-              aria-label="Grid view"
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => changeView("list")}
-              className={cn(
-                "grid h-8 w-8 place-items-center rounded-lg transition",
-                view === "list" ? "bg-accent text-white" : "text-muted hover:text-ink",
-              )}
-              aria-label="List view"
-            >
-              <List className="h-4 w-4" />
-            </button>
-          </div>
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="grid h-9 w-9 place-items-center rounded-xl border border-line text-muted transition hover:text-ink"
-            aria-label="Refresh"
-          >
-            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-          </button>
-          <button
-            type="button"
-            onClick={openCreate}
-            className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-          >
-            <Plus className="h-4 w-4" /> New folder
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Folders"
+        subtitle={`${filtered.length} of ${items.length} folder${items.length === 1 ? "" : "s"}`}
+        actions={
+          <>
+            <Tabs
+              items={[
+                { value: "grid", label: "Grid" },
+                { value: "list", label: "List" },
+              ]}
+              value={view}
+              onChange={(v) => changeView(v as ViewMode)}
+            />
+            <IconButton
+              icon={RefreshCw}
+              label="Refresh"
+              onClick={() => void load()}
+              className={cn(loading && "[&>svg]:animate-spin")}
+            />
+            <Button variant="primary" icon={Plus} onClick={openCreate}>
+              New folder
+            </Button>
+          </>
+        }
+      />
 
-      <div className="flex flex-wrap gap-1 rounded-xl border border-line bg-elevated p-1">
-        {(["all", "password", "note", "both"] as const).map((k) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => setFilter(k)}
-            className={cn(
-              "rounded-lg px-3 py-1.5 text-xs font-medium transition",
-              filter === k
-                ? "bg-accent text-white"
-                : "text-muted hover:text-ink",
-            )}
-          >
-            {k === "all" ? "All" : KIND_LABEL[k]}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        items={[
+          { value: "all", label: "All" },
+          { value: "password", label: KIND_LABEL.password },
+          { value: "note", label: KIND_LABEL.note },
+          { value: "both", label: KIND_LABEL.both },
+        ]}
+        value={filter}
+        onChange={(v) => setFilter(v as "all" | FolderKind)}
+      />
 
       {error && (
-        <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-xs text-red-300">
+        <p className="rounded-xl border border-danger/40 bg-danger-soft px-4 py-2 text-xs text-danger">
           {error}
         </p>
       )}
@@ -271,155 +244,158 @@ export default function FoldersPage() {
           icon={FolderIcon}
           title="No folders"
           hint="Create folders to group your passwords and notes."
+          action={
+            <Button variant="secondary" icon={Plus} onClick={openCreate}>
+              New folder
+            </Button>
+          }
         />
       ) : view === "grid" ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((folder) => (
-            <article
-              key={folder.id}
-              className="flex flex-col gap-3 rounded-2xl border border-line bg-elevated p-4"
-            >
-              <div className="flex items-start gap-3">
-                <div
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-white"
-                  style={{ backgroundColor: folder.color || COLORS[0] }}
-                >
-                  <FolderIcon className="h-5 w-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="truncate text-sm font-semibold text-ink">
-                      {folder.name}
-                    </h3>
-                    {folder.favorite && (
-                      <Star className="h-3.5 w-3.5 shrink-0 fill-current text-amber-400" />
-                    )}
-                  </div>
-                  <p className="text-xs text-muted">
-                    {KIND_LABEL[folder.kind]} · {itemCount.get(folder.id) ?? 0} item
-                    {(itemCount.get(folder.id) ?? 0) === 1 ? "" : "s"}
-                    {folder.parentId && parentName.get(folder.parentId)
-                      ? ` · in ${parentName.get(folder.parentId)}`
-                      : ""}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void onToggleFavorite(folder)}
-                  className={iconBtnCls}
-                  aria-label="Toggle favorite"
-                >
-                  <Star
-                    className={cn(
-                      "h-4 w-4",
-                      folder.favorite && "fill-current text-amber-400",
-                    )}
-                  />
-                </button>
-              </div>
-
-              <div className="mt-auto flex items-center justify-between pt-1 text-[11px] text-muted">
-                <span>Created {formatDate(folder.createdAt)}</span>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => openEdit(folder)}
-                    className={iconBtnCls}
-                    aria-label="Edit"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void onDelete(folder)}
-                    className={cn(iconBtnCls, "hover:text-red-400")}
-                    aria-label="Delete"
-                  >
-                    {busyId === folder.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
-      ) : (
-        <ul className="space-y-2">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {filtered.map((folder) => {
             const count = itemCount.get(folder.id) ?? 0;
             return (
-              <li
-                key={folder.id}
-                className="flex items-center gap-4 rounded-2xl border border-line bg-elevated px-4 py-3"
-              >
-                <div
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white"
-                  style={{ backgroundColor: folder.color || COLORS[0] }}
-                >
-                  <FolderIcon className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-medium text-ink">
-                      {folder.name}
-                    </p>
-                    {folder.favorite && (
-                      <Star className="h-3.5 w-3.5 shrink-0 fill-current text-amber-400" />
-                    )}
-                  </div>
-                  <p className="truncate text-xs text-muted">
-                    {KIND_LABEL[folder.kind]} · {count} item
-                    {count === 1 ? "" : "s"}
-                    {folder.parentId && parentName.get(folder.parentId)
-                      ? ` · in ${parentName.get(folder.parentId)}`
-                      : ""}
-                  </p>
-                </div>
-                <span className="hidden shrink-0 text-xs text-muted sm:block">
-                  {formatDate(folder.createdAt)}
-                </span>
-                <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => void onToggleFavorite(folder)}
-                    className={iconBtnCls}
-                    aria-label="Toggle favorite"
+              <Card key={folder.id} padding="md" className="group flex flex-col gap-3">
+                <div className="flex items-start gap-3">
+                  <div
+                    className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-white"
+                    style={{ backgroundColor: folder.color || COLORS[0] }}
                   >
-                    <Star
+                    <FolderIcon className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="truncate text-sm font-semibold text-ink">
+                        {folder.name}
+                      </h3>
+                      {busyId === folder.id && (
+                        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted" />
+                      )}
+                    </div>
+                    <p className="text-xs text-muted">
+                      {KIND_LABEL[folder.kind]} · {count} item
+                      {count === 1 ? "" : "s"}
+                      {folder.parentId && parentName.get(folder.parentId)
+                        ? ` · in ${parentName.get(folder.parentId)}`
+                        : ""}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <IconButton
+                      icon={Star}
+                      label={
+                        folder.favorite
+                          ? "Remove from favorites"
+                          : "Add to favorites"
+                      }
+                      onClick={() => void onToggleFavorite(folder)}
                       className={cn(
-                        "h-4 w-4",
-                        folder.favorite && "fill-current text-amber-400",
+                        folder.favorite &&
+                          "text-warn hover:bg-warn-soft hover:text-warn [&>svg]:fill-current",
                       )}
                     />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openEdit(folder)}
-                    className={iconBtnCls}
-                    aria-label="Edit"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void onDelete(folder)}
-                    className={cn(iconBtnCls, "hover:text-red-400")}
-                    aria-label="Delete"
-                  >
-                    {busyId === folder.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                  </button>
+                    <RowActions>
+                      <IconButton
+                        icon={Pencil}
+                        label="Edit folder"
+                        onClick={() => openEdit(folder)}
+                      />
+                      <Menu
+                        label="More actions"
+                        items={[
+                          {
+                            label: "Delete",
+                            icon: Trash2,
+                            onClick: () => void onDelete(folder),
+                            danger: true,
+                            disabled: busyId === folder.id,
+                          },
+                        ]}
+                      />
+                    </RowActions>
+                  </div>
                 </div>
-              </li>
+
+                <div className="mt-auto pt-1 text-xs text-muted">
+                  Created {formatDate(folder.createdAt)}
+                </div>
+              </Card>
             );
           })}
-        </ul>
+        </div>
+      ) : (
+        <Card padding="none">
+          <ul>
+            {filtered.map((folder) => {
+              const count = itemCount.get(folder.id) ?? 0;
+              return (
+                <li
+                  key={folder.id}
+                  className="group flex items-center gap-3 border-b border-line px-4 py-2.5 transition-colors last:border-0 hover:bg-raised"
+                >
+                  <div
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white"
+                    style={{ backgroundColor: folder.color || COLORS[0] }}
+                  >
+                    <FolderIcon className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-medium text-ink">
+                        {folder.name}
+                      </p>
+                      <Badge tone="neutral">{KIND_LABEL[folder.kind]}</Badge>
+                      {busyId === folder.id && (
+                        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted" />
+                      )}
+                    </div>
+                    <p className="truncate text-xs text-muted">
+                      {count} item{count === 1 ? "" : "s"}
+                      {folder.parentId && parentName.get(folder.parentId)
+                        ? ` · in ${parentName.get(folder.parentId)}`
+                        : ""}
+                    </p>
+                  </div>
+                  <span className="hidden shrink-0 text-xs text-muted sm:block">
+                    {formatDate(folder.createdAt)}
+                  </span>
+                  <RowActions className="shrink-0">
+                    <IconButton
+                      icon={Star}
+                      label={
+                        folder.favorite
+                          ? "Remove from favorites"
+                          : "Add to favorites"
+                      }
+                      onClick={() => void onToggleFavorite(folder)}
+                      className={cn(
+                        folder.favorite &&
+                          "text-warn hover:bg-warn-soft hover:text-warn [&>svg]:fill-current",
+                      )}
+                    />
+                    <IconButton
+                      icon={Pencil}
+                      label="Edit folder"
+                      onClick={() => openEdit(folder)}
+                    />
+                    <Menu
+                      label="More actions"
+                      items={[
+                        {
+                          label: "Delete",
+                          icon: Trash2,
+                          onClick: () => void onDelete(folder),
+                          danger: true,
+                          disabled: busyId === folder.id,
+                        },
+                      ]}
+                    />
+                  </RowActions>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
       )}
 
       <Modal
@@ -428,20 +404,15 @@ export default function FoldersPage() {
         title={editing ? "Edit folder" : "New folder"}
       >
         <form onSubmit={onSubmit} className="space-y-3">
-          <div>
-            <label className={labelCls}>Name</label>
-            <input
+          <Field label="Name">
+            <Input
               value={form.name}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, name: e.target.value }))
-              }
-              className={inputCls}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               placeholder="e.g. Work"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className={labelCls}>Color</label>
+          <Field label="Color">
             <div className="flex flex-wrap gap-2">
               {COLORS.map((c) => (
                 <button
@@ -452,38 +423,37 @@ export default function FoldersPage() {
                     "h-8 w-8 rounded-lg border-2 transition",
                     form.color === c
                       ? "border-ink"
-                      : "border-transparent hover:border-line",
+                      : "border-transparent hover:border-line-strong",
                   )}
                   style={{ backgroundColor: c }}
                   aria-label={`Color ${c}`}
+                  aria-pressed={form.color === c}
                 />
               ))}
             </div>
-          </div>
+          </Field>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Kind</label>
+            <Field label="Kind">
               <select
                 value={form.kind}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, kind: e.target.value as FolderKind }))
                 }
-                className={inputCls}
+                className="field"
               >
                 <option value="both">Both</option>
                 <option value="password">Passwords</option>
                 <option value="note">Notes</option>
               </select>
-            </div>
-            <div>
-              <label className={labelCls}>Parent folder</label>
+            </Field>
+            <Field label="Parent folder">
               <select
                 value={form.parentId ?? ""}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, parentId: e.target.value || null }))
                 }
-                className={inputCls}
+                className="field"
               >
                 <option value="">None</option>
                 {parentOptions.map((f) => (
@@ -492,36 +462,26 @@ export default function FoldersPage() {
                   </option>
                 ))}
               </select>
-            </div>
+            </Field>
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-ink">
-            <input
-              type="checkbox"
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-ink">Mark as favorite</span>
+            <Toggle
               checked={form.favorite}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, favorite: e.target.checked }))
-              }
+              onChange={(v) => setForm((f) => ({ ...f, favorite: v }))}
+              label="Mark as favorite"
             />
-            Mark as favorite
-          </label>
+          </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="rounded-xl border border-line px-4 py-2 text-sm text-muted transition hover:text-ink"
-            >
+            <Button variant="ghost" onClick={() => setOpen(false)}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-            >
+            </Button>
+            <Button type="submit" variant="primary" disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               {editing ? "Save changes" : "Create folder"}
-            </button>
+            </Button>
           </div>
         </form>
       </Modal>

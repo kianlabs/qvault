@@ -1,14 +1,17 @@
 // QVAULT — Favorites (route "/favorites"). Aggregates favorites across the
 // three favoritable stores: vault items, notes and folders.
+// UI overhaul: "Calm Precision" design system (presentation only — no logic change).
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { FolderTree, KeyRound, NotebookPen, Star } from "lucide-react";
+import { ChevronRight, FolderTree, KeyRound, NotebookPen, Star } from "lucide-react";
 import { useVaultStore } from "../../store/useVaultStore";
 import { useNotesStore } from "../../store/useNotesStore";
 import { useFoldersStore } from "../../store/useFoldersStore";
 import { useToast } from "../../components/Toast";
-import { cn, formatRelative } from "../../lib/utils";
+import { formatRelative } from "../../lib/utils";
+import { Card, IconButton, PageHeader, RowActions, Tabs } from "../../components/ui";
 import EmptyState from "../../components/EmptyState";
+import type { LucideIcon } from "lucide-react";
 
 type Tab = "all" | "vault" | "notes" | "folders";
 
@@ -76,36 +79,16 @@ export default function FavoritesPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-ink">Favorites</h1>
-          <p className="mt-1 text-sm text-muted">
-            Your starred items, notes and folders in one place.
-          </p>
-        </div>
-        <span className="inline-flex items-center gap-2 rounded-xl border border-line px-3 py-1.5 text-sm text-muted">
-          <Star className="h-4 w-4 text-amber-400" />
-          {total} starred
-        </span>
-      </header>
+      <PageHeader
+        title="Favorites"
+        subtitle="Your starred items, notes and folders in one place."
+      />
 
-      <div className="flex flex-wrap gap-2">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={cn(
-              "rounded-xl border px-3 py-1.5 text-sm transition",
-              tab === t.id
-                ? "border-accent bg-accent-soft text-ink"
-                : "border-line text-muted hover:text-ink",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        items={TABS.map((t) => ({ value: t.id, label: t.label }))}
+        value={tab}
+        onChange={(v) => setTab(v as Tab)}
+      />
 
       {total === 0 ? (
         <EmptyState
@@ -114,7 +97,7 @@ export default function FavoritesPage() {
           hint="Star a vault item, note or folder to pin it here."
         />
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-6">
           {favVault.length > 0 && (
             <Section title="Vault items" icon={KeyRound} to="/vault">
               {favVault.map((item) => (
@@ -169,22 +152,28 @@ function Section({
   children,
 }: {
   title: string;
-  icon: typeof KeyRound;
+  icon: LucideIcon;
   to: string;
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between">
+    <section className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
-          <Icon className="h-4 w-4 text-accent" />
+          <Icon className="h-4 w-4 text-muted" />
           {title}
         </h2>
-        <Link to={to} className="text-xs text-muted transition hover:text-ink">
+        <Link
+          to={to}
+          className="inline-flex items-center gap-1 text-xs text-muted transition-colors hover:text-ink"
+        >
           Open
+          <ChevronRight className="h-3.5 w-3.5" />
         </Link>
       </div>
-      <ul className="space-y-2">{children}</ul>
+      <Card padding="none">
+        <ul>{children}</ul>
+      </Card>
     </section>
   );
 }
@@ -201,22 +190,21 @@ function Row({
   onUnstar: () => void;
 }) {
   return (
-    <li className="flex items-center justify-between gap-3 rounded-xl border border-line bg-elevated px-4 py-3">
+    <li className="group flex items-center justify-between gap-3 border-b border-line px-4 py-2.5 last:border-0 hover:bg-raised">
       <div className="min-w-0">
         <p className="truncate text-sm text-ink">{title}</p>
         <p className="truncate text-xs text-muted">
           {subtitle} · {formatRelative(when)}
         </p>
       </div>
-      <button
-        type="button"
-        onClick={onUnstar}
-        aria-label="Remove from favorites"
-        title="Remove from favorites"
-        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-amber-400 transition hover:bg-white/5"
-      >
-        <Star className="h-4 w-4 fill-current" />
-      </button>
+      <RowActions>
+        <IconButton
+          icon={Star}
+          label="Remove from favorites"
+          onClick={onUnstar}
+          className="text-warn"
+        />
+      </RowActions>
     </li>
   );
 }

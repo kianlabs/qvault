@@ -2,74 +2,157 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* QVAULT design tokens — dark-first (default palette = dark).
-   Agents use: bg-surface, bg-elevated, border-line, text-ink, text-muted, bg-accent, text-accent */
+/* ===========================================================================
+   QVAULT — Design System "Calm Precision"
+   ---------------------------------------------------------------------------
+   Prinsip: tenang tapi presisi. Kedalaman lewat surface ramp berlapis (bukan
+   shadow tebal). Kontras teks memenuhi WCAG AA. Satu warna = satu makna.
+
+   Token lama (bg-surface, bg-elevated, border-line, text-ink, text-muted,
+   bg-accent, bg-accent-soft) TETAP ADA agar halaman lama tidak pecah — nilainya
+   diperbaiki. Token baru menambah ramp + warna semantik.
+   =========================================================================== */
+
 @theme inline {
+  /* --- surfaces (ramp berlapis) --- */
+  --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-elevated: var(--elevated);
+  --color-raised: var(--raised);
+
+  /* --- borders --- */
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  /* --- text --- */
   --color-ink: var(--ink);
   --color-muted: var(--muted);
+  --color-faint: var(--faint);
+
+  /* --- accent --- */
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
+  --color-accent-strong: var(--accent-strong);
+
+  /* --- semantic (satu arti per warna) --- */
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+
+  /* --- radius scale (dipakai konsisten) --- */
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --radius-2xl: 18px;
 }
 
+/* ---------------------------------------------------------------------------
+   Palet default = Dark (Calm Precision)
+   --------------------------------------------------------------------------- */
 :root {
-  --surface: #0e1015;
-  --elevated: #161922;
-  --line: #262b38;
-  --ink: #e8eaf0;
-  --muted: #98a1b3;
+  --bg: #08090c;             /* kanvas terdalam */
+  --surface: #0d0f14;        /* panel dasar */
+  --elevated: #12151c;       /* kartu */
+  --raised: #181c25;         /* popover / hover / input aktif */
+
+  --line: #1f242e;           /* hairline default */
+  --line-strong: #2b323f;    /* border yang perlu lebih tegas */
+
+  --ink: #e9ecf2;            /* teks utama */
+  --muted: #a3adbe;          /* teks sekunder (naik dari #98a1b3 utk kontras) */
+  --faint: #6d7787;          /* teks tersier / placeholder */
+
   --accent: #7c5cff;
-  --accent-soft: rgba(124, 92, 255, 0.14);
+  --accent-soft: rgba(124, 92, 255, 0.15);
+  --accent-strong: #9179ff;
+
+  --danger: #f2555a;
+  --danger-soft: rgba(242, 85, 90, 0.14);
+  --warn: #e0a458;
+  --warn-soft: rgba(224, 164, 88, 0.14);
+  --success: #3ecf8e;
+  --success-soft: rgba(62, 207, 142, 0.14);
+  --info: #5aa9f7;
+  --info-soft: rgba(90, 169, 247, 0.14);
+
   color-scheme: dark;
 }
 
+/* ---------------------------------------------------------------------------
+   Preset tema (Wave 5) — semua memetakan ke token yang sama
+   --------------------------------------------------------------------------- */
 html.light {
-  --surface: #f6f7fb;
+  --bg: #f4f5f8;
+  --surface: #ffffff;
   --elevated: #ffffff;
-  --line: #e3e6ee;
-  --ink: #12141a;
-  --muted: #5b6472;
+  --raised: #f2f3f7;
+  --line: #e4e6ec;
+  --line-strong: #d3d7e0;
+  --ink: #14161c;
+  --muted: #566072;
+  --faint: #8b93a3;
   --accent: #6d4aff;
   --accent-soft: rgba(109, 74, 255, 0.12);
+  --accent-strong: #5a37f0;
   color-scheme: light;
 }
 
-/* Wave 5 — named theme presets (dark-family). */
 html.slate {
-  --surface: #0f172a;
-  --elevated: #1e293b;
-  --line: #334155;
-  --ink: #e2e8f0;
-  --muted: #94a3b8;
+  --bg: #0b1220;
+  --surface: #101a2e;
+  --elevated: #16223a;
+  --raised: #1d2b47;
+  --line: #26344f;
+  --line-strong: #35486b;
+  --ink: #e8eefb;
+  --muted: #9fb0cc;
+  --faint: #6b7d9c;
   --accent: #38bdf8;
-  --accent-soft: rgba(56, 189, 248, 0.14);
+  --accent-soft: rgba(56, 189, 248, 0.15);
+  --accent-strong: #5cc9fa;
   color-scheme: dark;
 }
 
 html.nord {
+  --bg: #242933;
   --surface: #2e3440;
-  --elevated: #3b4252;
-  --line: #4c566a;
+  --elevated: #363d4b;
+  --raised: #414a5a;
+  --line: #454f60;
+  --line-strong: #55617a;
   --ink: #eceff4;
-  --muted: #aebacf;
+  --muted: #b6c2d4;
+  --faint: #8593a8;
   --accent: #88c0d0;
   --accent-soft: rgba(136, 192, 208, 0.16);
+  --accent-strong: #9dd0de;
   color-scheme: dark;
 }
 
 html.sepia {
-  --surface: #f4ecd8;
-  --elevated: #fbf5e6;
-  --line: #e0d3b8;
-  --ink: #3b3325;
-  --muted: #7a6c50;
+  --bg: #efe6d3;
+  --surface: #f7f0e0;
+  --elevated: #fdf8ec;
+  --raised: #f1e7d3;
+  --line: #e2d5bb;
+  --line-strong: #d0bf9d;
+  --ink: #332c1e;
+  --muted: #6d5f45;
+  --faint: #94866a;
   --accent: #b45309;
   --accent-soft: rgba(180, 83, 9, 0.12);
+  --accent-strong: #9a4608;
   color-scheme: light;
 }
 
+/* ---------------------------------------------------------------------------
+   Base
+   --------------------------------------------------------------------------- */
 html,
 body,
 #root {
@@ -78,31 +161,112 @@ body,
 
 body {
   margin: 0;
-  background: var(--surface);
+  background: var(--bg);
   color: var(--ink);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  font-variant-numeric: tabular-nums;
 }
 
-/* thin, unobtrusive scrollbars */
+/* Focus ring konsisten & aksesibel untuk seluruh app. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Scrollbar tipis, menyatu. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
+  scrollbar-color: var(--line-strong) transparent;
 }
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 *::-webkit-scrollbar-thumb {
-  background: var(--line);
+  background: var(--line-strong);
   border-radius: 999px;
   border: 3px solid transparent;
   background-clip: content-box;
 }
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--faint);
+  background-clip: content-box;
+}
 
-/* prevent text selection flicker on desktop chrome */
 button {
   cursor: pointer;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+/* ---------------------------------------------------------------------------
+   Kelas komponen berulang (mengurangi drift antar halaman).
+   Primitif React di src/components/ui/* memakai kelas-kelas ini.
+   --------------------------------------------------------------------------- */
+@layer components {
+  /* Panel/kartu dasar dengan hairline. */
+  .panel {
+    background: var(--elevated);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-2xl);
+  }
+
+  /* Input & kontrol form. */
+  .field {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--ink);
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .field::placeholder {
+    color: var(--faint);
+  }
+  .field:hover {
+    border-color: var(--line-strong);
+  }
+  .field:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--raised);
+  }
+
+  /* Animasi masuk halus untuk modal/popover. */
+  @keyframes qv-pop {
+    from {
+      opacity: 0;
+      transform: translateY(4px) scale(0.99);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  .qv-pop {
+    animation: qv-pop 0.14s ease-out;
+  }
+
+  @keyframes qv-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  .qv-fade {
+    animation: qv-fade 0.16s ease-out;
+  }
 }
