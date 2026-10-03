@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -6,6 +6,8 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
+import CommandPalette from "./components/CommandPalette";
+import ErrorBoundary from "./components/ErrorBoundary";
 import Sidebar from "./components/Sidebar";
 import Topbar from "./components/Topbar";
 import { ToastProvider } from "./components/Toast";
@@ -19,10 +21,40 @@ import IncomePage from "./features/income/IncomePage";
 import FoldersPage from "./features/folders/FoldersPage";
 import FavoritesPage from "./features/favorites/FavoritesPage";
 import GeneratorPage from "./features/generator/GeneratorPage";
+import HealthPage from "./features/health/HealthPage";
 import ActivityPage from "./features/activity/ActivityPage";
 import SettingsPage from "./features/settings/SettingsPage";
 import { useAuthStore } from "./store/useAuthStore";
 import { useSettingsStore } from "./store/useSettingsStore";
+
+/**
+ * Auto-lock idle timer (Wave 4).
+ * Sebelumnya setting `autoLockMin` hanya disimpan tapi TIDAK pernah dipakai —
+ * vault tak pernah terkunci otomatis. Hook ini menutup celah itu: setiap
+ * interaksi pengguna me-reset timer; saat idle melewati batas, vault dikunci.
+ */
+function useAutoLock(enabled: boolean, minutes: number) {
+  const lock = useAuthStore((s) => s.lock);
+  const timer = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!enabled || minutes <= 0) return;
+
+    const arm = () => {
+      if (timer.current) window.clearTimeout(timer.current);
+      timer.current = window.setTimeout(() => void lock(), minutes * 60_000);
+    };
+
+    const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"];
+    events.forEach((e) => window.addEventListener(e, arm, { passive: true }));
+    arm();
+
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, arm));
+      if (timer.current) window.clearTimeout(timer.current);
+    };
+  }, [enabled, minutes, lock]);
+}
 
 function Shell() {
   const location = useLocation();
@@ -40,6 +72,10 @@ function Shell() {
   const theme = settings?.theme ?? "dark";
   const fontSize = settings?.fontSize ?? 16;
   const accent = settings?.accent ?? "#7c5cff";
+  const autoLockMin = settings?.autoLockMin ?? 0;
+
+  // Auto-lock aktif hanya saat vault terbuka.
+  useAutoLock(!locked && autoLockMin > 0, autoLockMin);
 
   // apply theme + font size to <html>
   useEffect(() => {
@@ -64,23 +100,27 @@ function Shell() {
         <Topbar />
         <main className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-6xl px-6 py-8">
-            <Routes>
-              <Route path="/" element={<DashboardPage />} />
-              <Route path="/vault" element={<VaultPage />} />
-              <Route path="/notes" element={<NotesPage />} />
-              <Route path="/tasks" element={<TasksPage />} />
-              <Route path="/calendar" element={<CalendarPage />} />
-              <Route path="/income" element={<IncomePage />} />
-              <Route path="/folders" element={<FoldersPage />} />
-              <Route path="/favorites" element={<FavoritesPage />} />
-              <Route path="/generator" element={<GeneratorPage />} />
-              <Route path="/activity" element={<ActivityPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+            <ErrorBoundary>
+              <Routes>
+                <Route path="/" element={<DashboardPage />} />
+                <Route path="/vault" element={<VaultPage />} />
+                <Route path="/notes" element={<NotesPage />} />
+                <Route path="/tasks" element={<TasksPage />} />
+                <Route path="/calendar" element={<CalendarPage />} />
+                <Route path="/income" element={<IncomePage />} />
+                <Route path="/folders" element={<FoldersPage />} />
+                <Route path="/favorites" element={<FavoritesPage />} />
+                <Route path="/generator" element={<GeneratorPage />} />
+                <Route path="/health" element={<HealthPage />} />
+                <Route path="/activity" element={<ActivityPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </ErrorBoundary>
           </div>
         </main>
       </div>
+      <CommandPalette />
     </div>
   );
 }

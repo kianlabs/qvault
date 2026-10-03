@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 import type {
   ActivityEntry,
+  BrowserKind,
   CsvKind,
   DashboardStats,
   Folder,
@@ -23,6 +24,8 @@ import type {
   TaskPayload,
   Template,
   TemplatePayload,
+  TotpCode,
+  TotpStatus,
   VaultItem,
   VaultItemPayload,
   VaultListParams,
@@ -137,6 +140,19 @@ export const api = {
   saveTemplate: (payload: TemplatePayload) =>
     invoke<Template>("save_template", { payload }),
   deleteTemplate: (id: string) => invoke<void>("delete_template", { id }),
+
+  // --- totp.rs (Wave 4) ----------------------------------------------------
+  setTotpSecret: (id: string, secret: string) =>
+    invoke<void>("set_totp_secret", { id, secret }),
+  clearTotpSecret: (id: string) => invoke<void>("clear_totp_secret", { id }),
+  totpStatus: (id: string) => invoke<TotpStatus>("totp_status", { id }),
+  getTotpCode: (id: string) => invoke<TotpCode>("get_totp_code", { id }),
+
+  // --- data.rs (Wave 4) ----------------------------------------------------
+  autoBackupNow: () => invoke<string>("auto_backup_now"),
+  listAutoBackups: () => invoke<string[]>("list_auto_backups"),
+  importBrowserCsv: (kind: BrowserKind, path: string) =>
+    invoke<ImportResult>("import_browser_csv", { kind, path }),
 };
 
 export type Api = typeof api;

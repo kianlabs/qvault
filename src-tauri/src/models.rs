@@ -28,6 +28,8 @@ pub struct VaultItem {
     pub icon: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    /// Wave 4: true bila item punya secret TOTP (2FA aktif). serde → `hasTotp`.
+    pub has_totp: bool,
 }
 
 /// Catatan (note) yang sudah didekripsi.
@@ -119,6 +121,9 @@ pub struct VaultItemPayload {
     #[serde(default)]
     pub favorite: bool,
     pub icon: Option<String>,
+    /// Wave 4: secret TOTP (base32) opsional dari form vault.
+    #[serde(default)]
+    pub totp: Option<String>,
 }
 
 /// Payload buat/ubah catatan.
@@ -272,4 +277,24 @@ pub struct TemplatePayload {
 pub struct ImportResult {
     pub imported: i64,
     pub skipped: i64,
+}
+
+// ===========================================================================
+// Wave 4 (kontrak E.2) — TOTP 2FA
+// ===========================================================================
+
+/// Kode TOTP yang dihitung saat ini (RFC 6238).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TotpCode {
+    pub code: String,
+    pub seconds_remaining: i64,
+    pub period: i64,
+}
+
+/// Status 2FA sebuah item vault.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TotpStatus {
+    pub has_secret: bool,
 }

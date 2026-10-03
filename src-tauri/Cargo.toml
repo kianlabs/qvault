@@ -32,6 +32,11 @@ uuid = { version = "1", features = ["v4", "serde"] }
 thiserror = "2"
 csv = "1"
 
+# --- Wave 4 (kontrak E.4): TOTP RFC 6238 ---
+hmac = "0.12"
+sha1 = "0.10"
+data-encoding = "2"
+
 [profile.release]
 codegen-units = 1
 lto = true

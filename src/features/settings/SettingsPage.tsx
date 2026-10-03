@@ -8,6 +8,9 @@ import {
   AlertTriangle,
   Database,
   Download,
+  Globe,
+  HardDriveDownload,
+  History,
   Info,
   KeyRound,
   Loader2,
@@ -31,7 +34,7 @@ import { useToast } from "../../components/Toast";
 import Modal from "../../components/Modal";
 import AboutCard from "../../components/AboutCard";
 import { cn, errorMessage } from "../../lib/utils";
-import type { CsvKind, Theme } from "../../lib/types";
+import type { BrowserKind, CsvKind, Theme } from "../../lib/types";
 
 const ACCENTS = ["#7c5cff", "#22d3ee", "#34d399", "#f472b6", "#f59e0b"];
 
@@ -40,6 +43,11 @@ const CSV_KINDS: { value: CsvKind; label: string }[] = [
   { value: "notes", label: "Notes" },
   { value: "tasks", label: "Tasks" },
   { value: "income", label: "Income" },
+];
+
+const BROWSER_KINDS: { value: BrowserKind; label: string }[] = [
+  { value: "chrome", label: "Chrome" },
+  { value: "bitwarden", label: "Bitwarden" },
 ];
 
 export default function SettingsPage() {
@@ -71,6 +79,13 @@ export default function SettingsPage() {
   const [tplName, setTplName] = useState("");
   const [tplKind, setTplKind] = useState("note");
   const [tplBody, setTplBody] = useState("");
+
+  // Wave 4 — auto-backup + import browser.
+  const [autoBackupEnabled, setAutoBackupEnabled] = useState(false);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [showBackups, setShowBackups] = useState(false);
+  const [backupPaths, setBackupPaths] = useState<string[]>([]);
+  const [importKind, setImportKind] = useState<BrowserKind>("chrome");
 
   // Vault maintenance dialogs.
   const [pwdOpen, setPwdOpen] = useState(false);
@@ -234,6 +249,51 @@ export default function SettingsPage() {
     setDataBusy(true);
     try {
       const res = await api.importCsv(csvKind, path);
+      toast.success(`Imported ${res.imported}, skipped ${res.skipped}`);
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setDataBusy(false);
+    }
+  }
+
+  // --- Wave 4: auto-backup + import browser ---------------------------------
+
+  async function onBackupNow() {
+    setBackupBusy(true);
+    try {
+      const path = await api.autoBackupNow();
+      toast.success(`Backup created: ${path}`);
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setBackupBusy(false);
+    }
+  }
+
+  async function onShowBackups() {
+    setBackupBusy(true);
+    try {
+      const paths = await api.listAutoBackups();
+      setBackupPaths(paths);
+      setShowBackups(true);
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setBackupBusy(false);
+    }
+  }
+
+  async function onImportBrowser() {
+    const path = await open({
+      title: `Import from ${importKind}`,
+      multiple: false,
+      filters: [{ name: "CSV", extensions: ["csv"] }],
+    });
+    if (!path) return;
+    setDataBusy(true);
+    try {
+      const res = await api.importBrowserCsv(importKind, path);
       toast.success(`Imported ${res.imported}, skipped ${res.skipped}`);
     } catch (err) {
       toast.error(errorMessage(err));
@@ -537,6 +597,100 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Auto-backup (Wave 4) */}
+        <div className="space-y-3 rounded-xl border border-line p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-ink">Automatic backups</p>
+              <p className="text-xs text-muted">
+                Snapshot the encrypted database on a schedule. Keeps the last 5.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={autoBackupEnabled}
+              aria-label="Enable automatic backups"
+              onClick={() => setAutoBackupEnabled((v) => !v)}
+              className={cn(
+                "relative h-6 w-11 shrink-0 rounded-full border transition",
+                autoBackupEnabled
+                  ? "border-accent bg-accent"
+                  : "border-line bg-surface",
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all",
+                  autoBackupEnabled ? "left-[22px]" : "left-0.5",
+                )}
+              />
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onBackupNow}
+              disabled={backupBusy}
+              className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+            >
+              {backupBusy ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <HardDriveDownload className="h-4 w-4" />
+              )}
+              Back up now
+            </button>
+            <button
+              type="button"
+              onClick={onShowBackups}
+              disabled={backupBusy}
+              className="inline-flex items-center gap-2 rounded-xl border border-line px-4 py-2 text-sm text-muted transition hover:text-ink disabled:opacity-50"
+            >
+              <History className="h-4 w-4" />
+              Show backups
+            </button>
+          </div>
+        </div>
+
+        {/* Import from browser (Wave 4) */}
+        <div className="space-y-3 rounded-xl border border-line p-4">
+          <div>
+            <p className="text-sm font-medium text-ink">Import from browser</p>
+            <p className="text-xs text-muted">
+              Bring passwords in from a Chrome or Bitwarden CSV export.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <Field label="Source">
+              <select
+                value={importKind}
+                onChange={(e) => setImportKind(e.target.value as BrowserKind)}
+                className={inputCls}
+              >
+                {BROWSER_KINDS.map((k) => (
+                  <option key={k.value} value={k.value}>
+                    {k.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <button
+              type="button"
+              onClick={onImportBrowser}
+              disabled={dataBusy}
+              className="inline-flex items-center gap-2 rounded-xl border border-line px-4 py-2 text-sm text-muted transition hover:text-ink disabled:opacity-50"
+            >
+              {dataBusy ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Globe className="h-4 w-4" />
+              )}
+              Import CSV
+            </button>
+          </div>
+        </div>
+
         {/* Templates */}
         <div className="space-y-3 rounded-xl border border-line p-4">
           <div>
@@ -756,6 +910,31 @@ export default function SettingsPage() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Auto-backup list modal (Wave 4) */}
+      <Modal
+        open={showBackups}
+        onClose={() => setShowBackups(false)}
+        title="Automatic backups"
+      >
+        {backupPaths.length > 0 ? (
+          <ul className="max-h-80 space-y-2 overflow-y-auto">
+            {backupPaths.map((p) => (
+              <li
+                key={p}
+                className="truncate rounded-lg border border-line bg-surface px-3 py-2 font-mono text-xs text-ink"
+                title={p}
+              >
+                {p}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted">
+            No automatic backups yet. Use “Back up now” to create one.
+          </p>
+        )}
       </Modal>
     </div>
   );

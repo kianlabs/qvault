@@ -19,7 +19,8 @@ use crate::models::{ImportResult, Template, TemplatePayload};
 use crate::state::AppState;
 
 use super::{
-    b64_decode, b64_encode, dec_str, dek, enc_opt, log_activity, new_id, now, tags_to_json,
+    b64_decode, b64_encode, dec_str, dek, enc_opt, ensure_column, log_activity, new_id, now,
+    tags_to_json,
 };
 
 /// Prefix format file backup (kontrak A.4). Satu baris teks.
@@ -653,6 +654,209 @@ pub fn delete_template(state: State<'_, AppState>, id: String) -> Result<()> {
 }
 
 // ---------------------------------------------------------------------------
+// Wave 4 (kontrak E.5) — auto-backup (VACUUM INTO) + impor CSV browser
+// ---------------------------------------------------------------------------
+
+/// Jumlah backup otomatis terbaru yang disimpan (sisanya dipangkas).
+const KEEP_BACKUPS: usize = 5;
+
+/// Direktori backup otomatis: `$XDG_DATA_HOME|$HOME/.local/share` + `/qvault/backups`.
+fn backups_dir() -> Result<std::path::PathBuf> {
+    let base = std::env::var_os("XDG_DATA_HOME")
+        .map(std::path::PathBuf::from)
+        .filter(|p| !p.as_os_str().is_empty())
+        .or_else(|| {
+            std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local").join("share"))
+        })
+        .ok_or_else(|| AppError::Msg("tidak bisa menentukan data dir (HOME/XDG_DATA_HOME)".into()))?;
+    Ok(base.join("qvault").join("backups"))
+}
+
+/// Salin DB ke `<data_dir>/qvault/backups/qvault-YYYYMMDD-HHMMSS.db` via VACUUM INTO.
+/// Simpan 5 terbaru, sisanya dihapus. Return path file backup.
+#[tauri::command]
+pub fn auto_backup_now(state: State<'_, AppState>) -> Result<String> {
+    auto_backup_now_impl(&state)
+}
+
+/// Isi `auto_backup_now` tanpa wrapper `State` (agar bisa diuji runtime).
+pub(crate) fn auto_backup_now_impl(state: &AppState) -> Result<String> {
+    let dir = backups_dir()?;
+    std::fs::create_dir_all(&dir)?;
+
+    let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+    let dest = dir.join(format!("qvault-{stamp}.db"));
+    // VACUUM INTO gagal bila file sudah ada → pastikan belum ada.
+    if dest.exists() {
+        let _ = std::fs::remove_file(&dest);
+    }
+    let dest_str = dest.to_string_lossy().to_string();
+
+    state.db.with(|conn| {
+        conn.execute("VACUUM INTO ?1", rusqlite::params![dest_str])?;
+        Ok(())
+    })?;
+
+    // Prune: urut nama DESC (nama memuat timestamp), sisakan KEEP_BACKUPS terbaru.
+    let mut files = list_backup_files(&dir)?;
+    if files.len() > KEEP_BACKUPS {
+        for old in files.split_off(KEEP_BACKUPS) {
+            let _ = std::fs::remove_file(&old);
+        }
+    }
+    files.truncate(KEEP_BACKUPS);
+
+    state.db.with(|conn| {
+        log_activity(conn, "data", "auto_backup", Some(&dest_str))?;
+        Ok(())
+    })?;
+
+    Ok(dest_str)
+}
+
+/// Daftar file backup (`.db`) di direktori backup, urut nama DESC (terbaru dulu).
+fn list_backup_files(dir: &std::path::Path) -> Result<Vec<String>> {
+    let mut out: Vec<String> = Vec::new();
+    if !dir.exists() {
+        return Ok(out);
+    }
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("db") {
+            out.push(path.to_string_lossy().to_string());
+        }
+    }
+    out.sort();
+    out.reverse();
+    Ok(out)
+}
+
+/// Daftar path backup otomatis (terbaru dulu).
+#[tauri::command]
+pub fn list_auto_backups(_state: State<'_, AppState>) -> Result<Vec<String>> {
+    list_auto_backups_impl()
+}
+
+/// Isi `list_auto_backups` tanpa wrapper `State` (agar bisa diuji runtime).
+pub(crate) fn list_auto_backups_impl() -> Result<Vec<String>> {
+    let dir = backups_dir()?;
+    list_backup_files(&dir)
+}
+
+/// Impor CSV dari Chrome / Bitwarden (`kind` = "chrome" | "bitwarden") ke vault_items.
+#[tauri::command]
+pub fn import_browser_csv(
+    state: State<'_, AppState>,
+    kind: String,
+    path: String,
+) -> Result<ImportResult> {
+    import_browser_csv_impl(&state, kind, path)
+}
+
+/// Isi `import_browser_csv` tanpa wrapper `State` (agar bisa diuji runtime).
+pub(crate) fn import_browser_csv_impl(
+    state: &AppState,
+    kind: String,
+    path: String,
+) -> Result<ImportResult> {
+    let kind = kind.to_ascii_lowercase();
+    if kind != "chrome" && kind != "bitwarden" {
+        return Err(AppError::Msg(format!("kind tidak dikenal: {kind}")));
+    }
+
+    let key = dek(state)?;
+    state.db.with(|conn| {
+        ensure_column(conn, "vault_items", "totp_enc", "TEXT")?;
+
+        let mut rdr = csv::ReaderBuilder::new()
+            .flexible(true)
+            .from_path(&path)
+            .map_err(|e| AppError::Msg(format!("gagal membuka CSV: {e}")))?;
+
+        let headers: Vec<String> = match rdr.headers() {
+            Ok(h) => h.iter().map(|s| s.trim().to_ascii_lowercase()).collect(),
+            Err(_) => Vec::new(),
+        };
+        let col = |name: &str| headers.iter().position(|h| h == name);
+
+        let mut imported: i64 = 0;
+        let mut skipped: i64 = 0;
+
+        for rec in rdr.records() {
+            let rec = match rec {
+                Ok(r) => r,
+                Err(_) => {
+                    skipped += 1;
+                    continue;
+                }
+            };
+            let get = |name: &str| -> String {
+                col(name)
+                    .and_then(|i| rec.get(i))
+                    .unwrap_or("")
+                    .trim()
+                    .to_string()
+            };
+
+            // Nama item = `name` (Chrome & Bitwarden sama).
+            let name = get("name");
+            if name.is_empty() {
+                skipped += 1;
+                continue;
+            }
+
+            // Field per-format (Chrome & Bitwarden punya nama kolom berbeda).
+            let (url, username, password, notes, totp) = if kind == "chrome" {
+                (
+                    get("url"),
+                    get("username"),
+                    get("password"),
+                    get("note"),
+                    String::new(),
+                )
+            } else {
+                (
+                    get("login_uri"),
+                    get("login_username"),
+                    get("login_password"),
+                    get("notes"),
+                    get("login_totp"),
+                )
+            };
+
+            let id = new_id();
+            let ts = now();
+            conn.execute(
+                "INSERT INTO vault_items
+                    (id, title, username_enc, password_enc, url, notes_enc, tags,
+                     folder_id, favorite, icon, created_at, updated_at, totp_enc)
+                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",
+                rusqlite::params![
+                    id,
+                    name,
+                    enc_opt(&key, &none_if_empty(username))?,
+                    enc_opt(&key, &none_if_empty(password))?,
+                    none_if_empty(url),
+                    enc_opt(&key, &none_if_empty(notes))?,
+                    "[]",
+                    Option::<String>::None,
+                    0i64,
+                    Option::<String>::None,
+                    ts,
+                    ts,
+                    enc_opt(&key, &none_if_empty(totp))?,
+                ],
+            )?;
+            imported += 1;
+        }
+
+        log_activity(conn, "data", "import_browser", Some(&kind))?;
+        Ok(ImportResult { imported, skipped })
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Runtime test (ditambahkan parent) — membuktikan backup/restore + CSV
 // benar-benar bekerja end-to-end, bukan sekadar "compile".
 // Jalankan: cargo test
@@ -845,5 +1049,152 @@ mod tests {
         // Sanity: derive_key deterministik untuk salt yang sama.
         let salt = new_salt();
         assert_eq!(derive_key("x", &salt).unwrap(), derive_key("x", &salt).unwrap());
+    }
+
+    // -----------------------------------------------------------------------
+    // Wave 4 (E.5) — impor CSV browser + auto-backup
+    // -----------------------------------------------------------------------
+
+    /// Chrome CSV: header name,url,username,password,note → item terenkripsi.
+    #[test]
+    fn import_chrome_csv_roundtrip() {
+        let state = test_state();
+        let dek_key = random_key();
+        *state.vault_key.lock().unwrap() = Some(dek_key.clone());
+
+        let path = std::env::temp_dir().join("qvault_test_chrome.csv");
+        let path_s = path.to_string_lossy().to_string();
+        std::fs::write(
+            &path,
+            "name,url,username,password,note\n\
+             GitHub,https://github.com,kyan,s3cr3t,dev account\n\
+             ,https://empty.example,,,baris tanpa nama harus dilewati\n",
+        )
+        .unwrap();
+
+        let res = import_browser_csv_impl(&state, "chrome".into(), path_s.clone()).unwrap();
+        assert_eq!(res.imported, 1, "hanya baris dengan name yang diimpor");
+        assert_eq!(res.skipped, 1, "baris tanpa name dilewati");
+
+        let (title, pw, user) = state
+            .db
+            .with(|conn| {
+                let (t, p_blob, u_blob): (String, Option<String>, Option<String>) = conn.query_row(
+                    "SELECT title, password_enc, username_enc FROM vault_items LIMIT 1",
+                    [],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                )?;
+                Ok((t, dec_str(&dek_key, &p_blob), dec_str(&dek_key, &u_blob)))
+            })
+            .unwrap();
+        assert_eq!(title, "GitHub");
+        assert_eq!(pw, "s3cr3t");
+        assert_eq!(user, "kyan");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// Bitwarden CSV: pakai kolom login_uri/login_username/login_password/login_totp.
+    #[test]
+    fn import_bitwarden_csv_maps_login_columns() {
+        let state = test_state();
+        let dek_key = random_key();
+        *state.vault_key.lock().unwrap() = Some(dek_key.clone());
+
+        let path = std::env::temp_dir().join("qvault_test_bitwarden.csv");
+        let path_s = path.to_string_lossy().to_string();
+        std::fs::write(
+            &path,
+            "folder,favorite,type,name,notes,fields,reprompt,login_uri,login_username,login_password,login_totp\n\
+             ,0,login,GitHub,my notes,,0,https://github.com,kyan,hunter2,GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ\n",
+        )
+        .unwrap();
+
+        let res = import_browser_csv_impl(&state, "bitwarden".into(), path_s.clone()).unwrap();
+        assert_eq!(res.imported, 1);
+        assert_eq!(res.skipped, 0);
+
+        let (pw, user, totp_plain) = state
+            .db
+            .with(|conn| {
+                let (p_blob, u_blob, t_blob): (Option<String>, Option<String>, Option<String>) =
+                    conn.query_row(
+                        "SELECT password_enc, username_enc, totp_enc FROM vault_items LIMIT 1",
+                        [],
+                        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                    )?;
+                Ok((
+                    dec_str(&dek_key, &p_blob),
+                    dec_str(&dek_key, &u_blob),
+                    dec_str(&dek_key, &t_blob),
+                ))
+            })
+            .unwrap();
+        assert_eq!(pw, "hunter2");
+        assert_eq!(user, "kyan");
+        // login_totp terpetakan ke totp_enc (terenkripsi, bukan plaintext).
+        assert_eq!(totp_plain, "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// kind tidak dikenal → error.
+    #[test]
+    fn import_browser_csv_rejects_unknown_kind() {
+        let state = test_state();
+        *state.vault_key.lock().unwrap() = Some(random_key());
+        let err = import_browser_csv_impl(&state, "keepass".into(), "/tmp/x.csv".into());
+        assert!(err.is_err());
+    }
+
+    /// list_backup_files: filter `.db`, urut nama DESC (terbaru dulu).
+    #[test]
+    fn list_backup_files_sorted_desc() {
+        let dir = std::env::temp_dir().join(format!("qvault_bk_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("qvault-20250101-000000.db"), b"a").unwrap();
+        std::fs::write(dir.join("qvault-20250102-000000.db"), b"b").unwrap();
+        std::fs::write(dir.join("qvault-20250103-000000.db"), b"c").unwrap();
+        std::fs::write(dir.join("ignore.txt"), b"x").unwrap();
+
+        let files = list_backup_files(&dir).unwrap();
+        assert_eq!(files.len(), 3, "hanya file .db yang didaftar");
+        assert!(files[0].contains("20250103"), "terbaru dulu");
+        assert!(files[2].contains("20250101"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// auto_backup_now: bikin file .db valid, prune > 5, list mengembalikannya.
+    #[test]
+    fn auto_backup_creates_and_prunes() {
+        // Arahkan XDG_DATA_HOME ke temp unik agar tidak mengotori ~/.local/share.
+        let root = std::env::temp_dir().join(format!("qvault_xdg_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::env::set_var("XDG_DATA_HOME", &root);
+
+        let state = test_state();
+        *state.vault_key.lock().unwrap() = Some(random_key());
+        seed(&state, &state.vault_key.lock().unwrap().clone().unwrap());
+
+        // Pra-isi 5 backup lama (nama lebih tua dari yang baru dibuat).
+        let bdir = root.join("qvault").join("backups");
+        std::fs::create_dir_all(&bdir).unwrap();
+        for i in 1..=5 {
+            std::fs::write(bdir.join(format!("qvault-2024010{i}-000000.db")), b"old").unwrap();
+        }
+
+        let dest = auto_backup_now_impl(&state).unwrap();
+        assert!(std::path::Path::new(&dest).exists(), "file backup harus ada");
+        assert!(dest.ends_with(".db"));
+
+        // 5 lama + 1 baru = 6 → prune menyisakan 5 terbaru.
+        let listed = list_auto_backups_impl().unwrap();
+        assert_eq!(listed.len(), 5, "harus menyisakan 5 terbaru");
+        assert_eq!(listed[0], dest, "backup baru harus paling atas");
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

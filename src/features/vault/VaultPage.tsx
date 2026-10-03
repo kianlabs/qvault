@@ -19,8 +19,11 @@ import {
 import EmptyState from "../../components/EmptyState";
 import Modal from "../../components/Modal";
 import PasswordStrength from "../../components/PasswordStrength";
+import TotpField from "../../components/TotpField";
 import { useToast } from "../../components/Toast";
+import { secureCopy } from "../../lib/clipboard";
 import { useFoldersStore } from "../../store/useFoldersStore";
+import { useSettingsStore } from "../../store/useSettingsStore";
 import { useVaultStore } from "../../store/useVaultStore";
 import type { VaultItem, VaultItemPayload } from "../../lib/types";
 import {
@@ -61,6 +64,7 @@ const EMPTY_FORM: VaultItemPayload = {
   folderId: null,
   favorite: false,
   icon: null,
+  totp: null,
 };
 
 /**
@@ -124,6 +128,9 @@ export default function VaultPage() {
     revealPassword,
   } = useVaultStore();
   const { items: folders, load: loadFolders } = useFoldersStore();
+  // Wave 4 — durasi auto-clear clipboard dari settings (fallback 30s).
+  const clipboardClearSec =
+    useSettingsStore((s) => s.settings?.clipboardClearSec) ?? 30;
 
   const [search, setSearch] = useState("");
   const [folderId, setFolderId] = useState("");
@@ -199,6 +206,8 @@ export default function VaultPage() {
       folderId: item.folderId,
       favorite: item.favorite,
       icon: item.icon,
+      // 2FA tidak di-preload (secret tidak pernah dikirim ke frontend).
+      totp: null,
     });
     setTagsText(item.tags.join(", "));
     setOpen(true);
@@ -248,8 +257,8 @@ export default function VaultPage() {
   async function onCopyPassword(item: VaultItem) {
     try {
       const pw = revealed[item.id] ?? (await revealPassword(item.id));
-      await navigator.clipboard.writeText(pw);
-      toast.success("Password copied");
+      await secureCopy(pw, clipboardClearSec);
+      toast.success(`Password copied · clears in ${clipboardClearSec}s`);
     } catch {
       toast.error("Could not copy password");
     }
@@ -257,8 +266,8 @@ export default function VaultPage() {
 
   async function onCopyUsername(item: VaultItem) {
     try {
-      await navigator.clipboard.writeText(item.username);
-      toast.success("Username copied");
+      await secureCopy(item.username, clipboardClearSec);
+      toast.success(`Username copied · clears in ${clipboardClearSec}s`);
     } catch {
       toast.error("Clipboard unavailable");
     }
@@ -723,6 +732,15 @@ export default function VaultPage() {
               placeholder="Optional notes…"
             />
           </div>
+
+          {/* 2FA hanya tampil untuk item yang sudah tersimpan (punya id). */}
+          {editing && (
+            <TotpField
+              itemId={editing.id}
+              hasTotp={editing.hasTotp}
+              onChanged={() => void load()}
+            />
+          )}
 
           <label className="flex items-center gap-2 text-sm text-ink">
             <input

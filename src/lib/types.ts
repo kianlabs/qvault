@@ -39,6 +39,8 @@ export interface VaultItem {
   folderId: string | null;
   favorite: boolean;
   icon: string | null;
+  /** Wave 4 — true bila item punya secret 2FA (TOTP) tersimpan. */
+  hasTotp: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -117,6 +119,8 @@ export interface VaultItemPayload {
   folderId: string | null;
   favorite: boolean;
   icon: string | null;
+  /** Wave 4 — secret 2FA (base32) bila diisi. */
+  totp?: string | null;
 }
 
 export interface NotePayload {
@@ -231,6 +235,25 @@ export interface ImportResult {
 
 /** CSV export targets. */
 export type CsvKind = "vault" | "notes" | "tasks" | "income";
+
+// ---------------------------------------------------------------------------
+// Wave 4 — TOTP (2FA) + auto-backup + browser import
+// ---------------------------------------------------------------------------
+
+/** `get_totp_code` return shape. */
+export interface TotpCode {
+  code: string;
+  secondsRemaining: number;
+  period: number;
+}
+
+/** `totp_status` return shape. */
+export interface TotpStatus {
+  hasSecret: boolean;
+}
+
+/** Browser CSV import sources. */
+export type BrowserKind = "chrome" | "bitwarden";
 
 // ---------------------------------------------------------------------------
 // List query params (camelCase arg keys matching SPEC §4)

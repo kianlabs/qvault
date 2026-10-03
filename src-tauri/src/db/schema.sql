@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS vault_items (
     favorite     INTEGER NOT NULL DEFAULT 0,
     icon         TEXT,
     created_at   TEXT NOT NULL,
-    updated_at   TEXT NOT NULL
+    updated_at   TEXT NOT NULL,
+    totp_enc     TEXT -- Wave 4: secret TOTP terenkripsi (DEK), NULL bila 2FA mati
 );
 
 CREATE TABLE IF NOT EXISTS notes (

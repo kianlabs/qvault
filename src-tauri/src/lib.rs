@@ -72,6 +72,15 @@ pub fn run() {
             commands::data::list_templates,
             commands::data::save_template,
             commands::data::delete_template,
+            // totp (wave 4)
+            commands::totp::set_totp_secret,
+            commands::totp::clear_totp_secret,
+            commands::totp::totp_status,
+            commands::totp::get_totp_code,
+            // data (wave 4)
+            commands::data::auto_backup_now,
+            commands::data::list_auto_backups,
+            commands::data::import_browser_csv,
         ])
         .run(tauri::generate_context!())
         .expect("error while running QVAULT");

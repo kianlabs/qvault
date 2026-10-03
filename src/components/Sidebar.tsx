@@ -4,6 +4,7 @@ import {
   Activity,
   Calendar,
   FolderTree,
+  HeartPulse,
   KeyRound,
   LayoutDashboard,
   ListChecks,
@@ -25,6 +26,7 @@ const LINKS = [
   { to: "/folders", label: "Folders", icon: FolderTree },
   { to: "/favorites", label: "Favorites", icon: Star },
   { to: "/generator", label: "Generator", icon: Wand2 },
+  { to: "/health", label: "Health", icon: HeartPulse },
   { to: "/activity", label: "Activity", icon: Activity },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;

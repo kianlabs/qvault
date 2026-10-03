@@ -12,11 +12,11 @@ use crate::models::{VaultItem, VaultItemPayload};
 use crate::state::AppState;
 
 use super::{
-    dec_str, dek, enc_opt, log_activity, new_id, now, tags_from_json, tags_to_json,
+    dec_str, dek, enc_opt, ensure_column, log_activity, new_id, now, tags_from_json, tags_to_json,
 };
 
 const COLS: &str = "id, title, username_enc, password_enc, url, notes_enc, tags, \
-                    folder_id, favorite, icon, created_at, updated_at";
+                    folder_id, favorite, icon, created_at, updated_at, totp_enc";
 
 fn map_row(row: &Row<'_>, key: &Key) -> rusqlite::Result<VaultItem> {
     Ok(VaultItem {
@@ -32,6 +32,11 @@ fn map_row(row: &Row<'_>, key: &Key) -> rusqlite::Result<VaultItem> {
         icon: row.get(9)?,
         created_at: row.get(10)?,
         updated_at: row.get(11)?,
+        // Wave 4: 2FA aktif bila kolom totp_enc berisi (bukan NULL/kosong).
+        has_totp: row
+            .get::<_, Option<String>>(12)?
+            .map(|s| !s.is_empty())
+            .unwrap_or(false),
     })
 }
 
@@ -51,6 +56,8 @@ pub fn list_vault_items(
 ) -> Result<Vec<VaultItem>> {
     let key = dek(&state)?;
     state.db.with(|conn| {
+        // Wave 4: pastikan kolom totp_enc ada (DB lama) sebelum SELECT * COLS.
+        ensure_column(conn, "vault_items", "totp_enc", "TEXT")?;
         // title tidak terenkripsi → bisa difilter di SQL. Search atas username
         // dilakukan setelah dekripsi (field sensitif tidak bisa di-query).
         let search_term = search
@@ -93,10 +100,12 @@ pub fn create_vault_item(
     let id = new_id();
     let ts = now();
     state.db.with(|conn| {
+        // Wave 4: kolom totp_enc wajib ada sebelum INSERT.
+        ensure_column(conn, "vault_items", "totp_enc", "TEXT")?;
         conn.execute(
             "INSERT INTO vault_items
-                (id, title, username_enc, password_enc, url, notes_enc, tags, folder_id, favorite, icon, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                (id, title, username_enc, password_enc, url, notes_enc, tags, folder_id, favorite, icon, created_at, updated_at, totp_enc)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             rusqlite::params![
                 id,
                 payload.title,
@@ -110,6 +119,7 @@ pub fn create_vault_item(
                 payload.icon,
                 ts,
                 ts,
+                enc_opt(&key, &payload.totp)?,
             ],
         )?;
         log_activity(conn, "vault", "create", Some(&payload.title))?;
@@ -126,11 +136,14 @@ pub fn update_vault_item(
     let key = dek(&state)?;
     let ts = now();
     state.db.with(|conn| {
+        // Wave 4: kolom totp_enc wajib ada sebelum UPDATE.
+        ensure_column(conn, "vault_items", "totp_enc", "TEXT")?;
         let n = conn.execute(
             "UPDATE vault_items SET
                 title = ?1, username_enc = ?2, password_enc = ?3, url = ?4, notes_enc = ?5,
-                tags = ?6, folder_id = ?7, favorite = ?8, icon = ?9, updated_at = ?10
-             WHERE id = ?11",
+                tags = ?6, folder_id = ?7, favorite = ?8, icon = ?9, updated_at = ?10,
+                totp_enc = ?11
+             WHERE id = ?12",
             rusqlite::params![
                 payload.title,
                 enc_opt(&key, &payload.username)?,
@@ -142,6 +155,8 @@ pub fn update_vault_item(
                 payload.favorite as i64,
                 payload.icon,
                 ts,
+                // Kontrak E.3: tulis apa adanya (None → NULL).
+                enc_opt(&key, &payload.totp)?,
                 id,
             ],
         )?;

@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { useToast } from "../../components/Toast";
 import PasswordStrength from "../../components/PasswordStrength";
+import { secureCopy } from "../../lib/clipboard";
+import { useSettingsStore } from "../../store/useSettingsStore";
 import { cn, generatePassword, passwordStrength } from "../../lib/utils";
 
 interface Toggles {
@@ -29,6 +31,9 @@ const TOGGLE_DEFS: { key: keyof Toggles; label: string }[] = [
 
 export default function GeneratorPage() {
   const toast = useToast();
+  // Wave 4 — durasi auto-clear clipboard dari settings (fallback 30s).
+  const clipboardClearSec =
+    useSettingsStore((s) => s.settings?.clipboardClearSec) ?? 30;
   const [length, setLength] = useState(20);
   const [toggles, setToggles] = useState<Toggles>({
     lowercase: true,
@@ -61,8 +66,8 @@ export default function GeneratorPage() {
   async function copy() {
     if (!password) return;
     try {
-      await navigator.clipboard.writeText(password);
-      toast.success("Password copied to clipboard");
+      await secureCopy(password, clipboardClearSec);
+      toast.success(`Password copied · clears in ${clipboardClearSec}s`);
     } catch {
       toast.error("Clipboard unavailable");
     }

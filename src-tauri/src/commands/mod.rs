@@ -12,6 +12,7 @@ pub mod notes;
 pub mod security;
 pub mod settings;
 pub mod tasks;
+pub mod totp;
 pub mod vault;
 
 use base64::engine::general_purpose::STANDARD as B64;
@@ -44,6 +45,43 @@ pub(crate) fn now() -> String {
 /// ID uuid v4 (SPEC §3).
 pub(crate) fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
+}
+
+// ---------------------------------------------------------------------------
+// migrasi kolom (Wave 4, kontrak E.1) — SQLite tidak punya "ADD COLUMN IF NOT
+// EXISTS", jadi cek dulu via PRAGMA table_info, baru ALTER bila belum ada.
+// Idempoten & murah → aman dipanggil tiap command yang menyentuh tabel.
+// ---------------------------------------------------------------------------
+
+/// Pastikan `table.col` ada; tambahkan `ALTER TABLE ... ADD COLUMN` bila belum.
+pub(crate) fn ensure_column(
+    conn: &Connection,
+    table: &str,
+    col: &str,
+    decl: &str,
+) -> Result<()> {
+    // PRAGMA tidak menerima bound parameter untuk nama tabel → pakai format!.
+    // Nama tabel/kolom di sini konstanta internal (bukan input user).
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let mut exists = false;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(1)?; // kolom ke-1 = nama kolom
+        if name.eq_ignore_ascii_case(col) {
+            exists = true;
+            break;
+        }
+    }
+    drop(rows);
+    drop(stmt);
+
+    if !exists {
+        conn.execute(
+            &format!("ALTER TABLE {table} ADD COLUMN {col} {decl}"),
+            [],
+        )?;
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -146,6 +184,19 @@ pub(crate) fn dec_str(key: &Key, value: &Option<String>) -> String {
 // Runtime smoke test (ditambahkan parent) — membuktikan crypto + SQL benar-benar
 // bekerja end-to-end, bukan sekadar "compile". Jalankan: cargo test
 // ---------------------------------------------------------------------------
+#[cfg(test)]
+pub(crate) mod tests_support {
+    use crate::state::AppState;
+
+    /// AppState dengan DB in-memory + vault terkunci (DEK belum di-set).
+    pub(crate) fn test_state() -> AppState {
+        AppState {
+            db: crate::db::open_in_memory().expect("in-memory db"),
+            vault_key: std::sync::Mutex::new(None),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
