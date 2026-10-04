@@ -9,6 +9,13 @@ use std::sync::Mutex;
 use crate::crypto::cipher::Key;
 use crate::db::Db;
 
+/// Guard untuk rate-limiting unlock attempts (M1, WAVE5).
+#[derive(Default)]
+pub struct UnlockGuard {
+    pub fails: u32,
+    pub locked_until: Option<std::time::Instant>,
+}
+
 /// State aplikasi global (di-`manage` oleh Tauri).
 pub struct AppState {
     /// Koneksi database.
@@ -19,6 +26,8 @@ pub struct AppState {
     /// database in-memory sementara (data TIDAK persisten). Diteruskan ke UI
     /// lewat `vault_status` agar pengguna tidak salah sangka "data hilang".
     pub degraded: Option<String>,
+    /// Rate-limit untuk unlock attempts (M1).
+    pub unlock_fails: Mutex<UnlockGuard>,
 }
 
 impl AppState {
@@ -44,6 +53,7 @@ impl AppState {
             db,
             vault_key: Mutex::new(None),
             degraded,
+            unlock_fails: Mutex::new(UnlockGuard::default()),
         }
     }
 }

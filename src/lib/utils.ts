@@ -200,11 +200,23 @@ export function generatePassword(options: GenerateOptions = {}): string {
   if (!pool) return "";
 
   const len = Math.max(4, Math.min(128, Math.floor(length)));
-  const bytes = new Uint32Array(len);
-  crypto.getRandomValues(bytes);
+  const poolLen = pool.length;
+  const limit = Math.floor(2 ** 32 / poolLen) * poolLen;
+
   let out = "";
-  for (let i = 0; i < len; i++) {
-    out += pool[bytes[i] % pool.length];
+  let bufferIndex = 0;
+  let buffer = new Uint32Array(len * 2);
+  crypto.getRandomValues(buffer);
+
+  while (out.length < len) {
+    if (bufferIndex >= buffer.length) {
+      crypto.getRandomValues(buffer);
+      bufferIndex = 0;
+    }
+    const val = buffer[bufferIndex++];
+    if (val < limit) {
+      out += pool[val % poolLen];
+    }
   }
   return out;
 }

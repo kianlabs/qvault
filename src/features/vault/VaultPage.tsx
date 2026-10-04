@@ -174,6 +174,32 @@ export default function VaultPage() {
     void loadFolders();
   }, [load, loadFolders]);
 
+  // L5: password yang sudah di-reveal tidak boleh tertinggal di memori.
+  // (a) buang entri untuk item yang sudah tidak ada di daftar;
+  useEffect(() => {
+    setRevealed((r) => {
+      const ids = new Set(items.map((i) => i.id));
+      const kept = Object.fromEntries(
+        Object.entries(r).filter(([id]) => ids.has(id)),
+      );
+      return Object.keys(kept).length === Object.keys(r).length ? r : kept;
+    });
+  }, [items]);
+
+  // (b) sembunyikan semua saat jendela kehilangan fokus / tab disembunyikan.
+  useEffect(() => {
+    const hideAll = () => setRevealed({});
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") hideAll();
+    };
+    window.addEventListener("blur", hideAll);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("blur", hideAll);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
+
   const usableFolders = useMemo(
     () => folders.filter((f) => f.kind === "password" || f.kind === "both"),
     [folders],
@@ -227,8 +253,8 @@ export default function VaultPage() {
       folderId: item.folderId,
       favorite: item.favorite,
       icon: item.icon,
-      // 2FA tidak di-preload (secret tidak pernah dikirim ke frontend).
-      totp: null,
+      // Tri-state: undefined = jangan sentuh (preserve), null = hapus, string = set.
+      totp: undefined,
     });
     setTagsText(item.tags.join(", "));
     setOpen(true);

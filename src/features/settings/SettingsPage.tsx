@@ -98,9 +98,10 @@ export default function SettingsPage() {
   const setTheme = useThemeStore((s) => s.setTheme);
   const syncTheme = useThemeStore((s) => s.sync);
   const [accent, setAccent] = useState<string>(DEFAULT_ACCENT);
-  const [fontSize, setFontSize] = useState(16);
+  const [fontSize, setFontSize] = useState(15);
   // Wave 5 — tampilkan favicon situs di daftar vault (default true).
   const [showIcons, setShowIcons] = useState(true);
+  const [autoBackupEnabled, setAutoBackupEnabled] = useState(true);
   const [autoLockMin, setAutoLockMin] = useState(15);
   const [clipboardClearSec, setClipboardClearSec] = useState(30);
   const [saving, setSaving] = useState(false);
@@ -149,6 +150,7 @@ export default function SettingsPage() {
     setAccent(settings.accent);
     setFontSize(settings.fontSize);
     setShowIcons(settings.showIcons);
+    setAutoBackupEnabled(settings.autoBackupEnabled);
     setAutoLockMin(settings.autoLockMin);
     setClipboardClearSec(settings.clipboardClearSec);
   }, [settings, syncTheme]);
@@ -582,7 +584,7 @@ export default function SettingsPage() {
           <Field label="Clear clipboard after (seconds)">
             <Input
               type="number"
-              min={0}
+              min={5}
               value={clipboardClearSec}
               onChange={(e) => setClipboardClearSec(Number(e.target.value))}
             />
@@ -616,7 +618,7 @@ export default function SettingsPage() {
           <div>
             <p className="text-sm font-semibold text-ink">Backup vault</p>
             <p className="text-xs text-muted">
-              Export an encrypted copy of every item, note, task and setting.
+              Export an encrypted copy of every item, note, task and folder.
             </p>
           </div>
           <Field label="Backup password">
@@ -709,12 +711,13 @@ export default function SettingsPage() {
         </div>
 
         {/* Auto-backup (Wave 4) */}
+        {/* Auto-backup (Wave 4) */}
         <div className="space-y-3 rounded-xl border border-line bg-surface p-4">
           <div>
             <p className="text-sm font-semibold text-ink">Backups</p>
             <p className="text-xs text-muted">
               Snapshot the encrypted database anytime — keeps the latest 5.
-              Daily automatic snapshots run via the system backup timer.
+              Automatic snapshots run once every 24 hours while the app is open.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -738,6 +741,35 @@ export default function SettingsPage() {
             >
               Show backups
             </Button>
+          </div>
+
+          {/* Toggle auto-backup */}
+          <div>
+            <p className="mb-2 text-xs font-medium text-ink">Automatic backups</p>
+            <p className="mb-2 text-xs text-muted">
+              Snapshot otomatis tiap 24 jam selama app berjalan; menyimpan 5 terbaru.
+            </p>
+            <div className="flex gap-2">
+              {([true, false] as const).map((val) => (
+                <button
+                  key={String(val)}
+                  type="button"
+                  onClick={() => {
+                    setAutoBackupEnabled(val);
+                    void persist({ autoBackupEnabled: val }, "Backup settings saved");
+                  }}
+                  aria-pressed={autoBackupEnabled === val}
+                  className={cn(
+                    "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                    autoBackupEnabled === val
+                      ? "border-accent bg-accent text-white"
+                      : "border-line bg-bg text-muted hover:border-accent/50 hover:text-ink"
+                  )}
+                >
+                  {val ? "On" : "Off"}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

@@ -65,13 +65,56 @@ fn unlock_dek(password: &str, salt_b64: &str, wrapped: &str, verifier: &str) -> 
 /// Panjang minimal password master.
 const MIN_PW_LEN: usize = 8;
 
-fn validate_password(pw: &str) -> Result<()> {
+pub(crate) fn validate_password(pw: &str) -> Result<()> {
     if pw.len() < MIN_PW_LEN {
         return Err(AppError::Msg(format!(
             "password master minimal {MIN_PW_LEN} karakter"
         )));
     }
     Ok(())
+}
+
+// --- rate-limiting unlock (M1, WAVE5) -------------------------------------
+
+/// Cek apakah unlock attempt diizinkan; error bila masih terkunci akibat
+/// terlalu banyak percobaan gagal.
+fn check_unlock_allowed(state: &AppState) -> Result<()> {
+    let guard = state
+        .unlock_fails
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(until) = guard.locked_until {
+        if std::time::Instant::now() < until {
+            return Err(AppError::Msg(
+                "terlalu banyak percobaan gagal; coba lagi nanti".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Catat kegagalan unlock; terapkan backoff eksponensial setelah 5 kegagalan.
+fn record_unlock_failure(state: &AppState) {
+    let mut guard = state
+        .unlock_fails
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    guard.fails += 1;
+    if guard.fails >= 5 {
+        let backoff_secs = 2u64.pow(guard.fails - 5).min(300);
+        guard.locked_until =
+            Some(std::time::Instant::now() + std::time::Duration::from_secs(backoff_secs));
+    }
+}
+
+/// Reset counter setelah unlock berhasil.
+fn record_unlock_success(state: &AppState) {
+    let mut guard = state
+        .unlock_fails
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    guard.fails = 0;
+    guard.locked_until = None;
 }
 
 // --- commands --------------------------------------------------------------
@@ -126,6 +169,8 @@ pub fn init_vault(state: State<'_, AppState>, master_password: String) -> Result
 
 #[tauri::command]
 pub fn unlock_vault(state: State<'_, AppState>, master_password: String) -> Result<()> {
+    check_unlock_allowed(&state)?;
+
     let dek = state.db.with(|conn| {
         let salt = get_setting(conn, "pwd_salt")?
             .ok_or_else(|| AppError::Msg("vault belum diinisialisasi".into()))?;
@@ -134,16 +179,26 @@ pub fn unlock_vault(state: State<'_, AppState>, master_password: String) -> Resu
         let verifier = get_setting(conn, "pwd_verifier")?
             .ok_or_else(|| AppError::Msg("vault belum diinisialisasi".into()))?;
 
-        let dek = unlock_dek(&master_password, &salt, &wrapped, &verifier)?;
-        log_activity(conn, "security", "unlock", None)?;
-        Ok(dek)
-    })?;
+        unlock_dek(&master_password, &salt, &wrapped, &verifier)
+    });
 
-    *state
-        .vault_key
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(dek);
-    Ok(())
+    match dek {
+        Ok(key) => {
+            record_unlock_success(&state);
+            state
+                .db
+                .with(|conn| log_activity(conn, "security", "unlock", None))?;
+            *state
+                .vault_key
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(key);
+            Ok(())
+        }
+        Err(e) => {
+            record_unlock_failure(&state);
+            Err(e)
+        }
+    }
 }
 
 #[tauri::command]
@@ -164,7 +219,9 @@ pub fn change_master_password(
     new_password: String,
 ) -> Result<()> {
     validate_password(&new_password)?;
-    state.db.with(|conn| {
+    check_unlock_allowed(&state)?;
+
+    let result = state.db.with(|conn| {
         let salt = get_setting(conn, "pwd_salt")?
             .ok_or_else(|| AppError::Msg("vault belum diinisialisasi".into()))?;
         let wrapped = get_setting(conn, "dek_wrapped")?
@@ -187,7 +244,18 @@ pub fn change_master_password(
         set_setting(conn, "dek_wrapped", &wrap_dek(&new_key, &dek)?)?;
         log_activity(conn, "security", "change_master_password", None)?;
         Ok(())
-    })
+    });
+
+    match result {
+        Ok(()) => {
+            record_unlock_success(&state);
+            Ok(())
+        }
+        Err(e) => {
+            record_unlock_failure(&state);
+            Err(e)
+        }
+    }
 }
 
 #[tauri::command]
@@ -238,6 +306,7 @@ pub fn reset_vault(state: State<'_, AppState>, recovery_code: String) -> Result<
              DELETE FROM tasks;
              DELETE FROM income;
              DELETE FROM folders;
+             DELETE FROM templates;
              DELETE FROM activity_log;
              DELETE FROM settings;",
         )?;
@@ -251,4 +320,60 @@ pub fn reset_vault(state: State<'_, AppState>, recovery_code: String) -> Result<
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commands::tests_support::test_state;
+
+    #[test]
+    fn unlock_rate_limit_blocks_after_failures() {
+        let state = test_state();
+
+        // Simulasi 5 kegagalan unlock
+        for _ in 0..5 {
+            record_unlock_failure(&state);
+        }
+
+        // Setelah 5 kegagalan, check_unlock_allowed harus error
+        let result = check_unlock_allowed(&state);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("terlalu banyak percobaan gagal"));
+
+        // record_unlock_success harus reset counter
+        record_unlock_success(&state);
+        let result = check_unlock_allowed(&state);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn unlock_rate_limit_exponential_backoff() {
+        let state = test_state();
+
+        // 5 kegagalan pertama → locked_until di-set
+        for _ in 0..5 {
+            record_unlock_failure(&state);
+        }
+
+        let guard = state
+            .unlock_fails
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        assert_eq!(guard.fails, 5);
+        assert!(guard.locked_until.is_some());
+
+        // Kegagalan tambahan meningkatkan backoff
+        drop(guard);
+        record_unlock_failure(&state);
+        let guard = state
+            .unlock_fails
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        assert_eq!(guard.fails, 6);
+        assert!(guard.locked_until.is_some());
+    }
 }

@@ -199,7 +199,7 @@ mod tests {
         let bytes = decode_secret("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ").unwrap();
         for unix in [0i64, 1, 29, 30, 59, 61, 1_000_000] {
             let (_, rem) = totp_at(&bytes, unix).unwrap();
-            assert!(rem >= 1 && rem <= PERIOD, "unix={unix} rem={rem}");
+            assert!((1..=PERIOD).contains(&rem), "unix={unix} rem={rem}");
             assert_eq!(rem, PERIOD - (unix % PERIOD));
         }
     }

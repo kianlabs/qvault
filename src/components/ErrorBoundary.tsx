@@ -40,7 +40,6 @@ export default class ErrorBoundary extends Component<Props, State> {
       error?.name ?? "Error",
       error?.message ?? "Unknown error",
       error?.stack ?? "",
-      `url: ${window.location.href}`,
       `time: ${new Date().toISOString()}`,
     ].join("\n");
     try {

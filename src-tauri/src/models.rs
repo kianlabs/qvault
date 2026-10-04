@@ -121,9 +121,25 @@ pub struct VaultItemPayload {
     #[serde(default)]
     pub favorite: bool,
     pub icon: Option<String>,
-    /// Wave 4: secret TOTP (base32) opsional dari form vault.
-    #[serde(default)]
-    pub totp: Option<String>,
+    /// Wave 4: secret TOTP (base32) tri-state:
+    /// - `None` = field absen (jangan sentuh saat update),
+    /// - `Some(None)` = hapus eksplisit,
+    /// - `Some(Some(s))` = set secret baru.
+    #[serde(
+        default,
+        deserialize_with = "double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub totp: Option<Option<String>>,
+}
+
+/// Helper serde: field absen → `None`, `null` → `Some(None)`, value → `Some(Some(T))`.
+pub fn double_option<'de, T, D>(de: D) -> std::result::Result<Option<Option<T>>, D::Error>
+where
+    T: serde::Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    serde::Deserialize::deserialize(de).map(Some)
 }
 
 /// Payload buat/ubah catatan.
@@ -190,6 +206,8 @@ pub struct SettingsPayload {
     pub clipboard_clear_sec: Option<i64>,
     /// Wave 5 — toggle ikon situs.
     pub show_icons: Option<bool>,
+    /// Scheduler backup otomatis (tiap 24 jam selama app berjalan).
+    pub auto_backup_enabled: Option<bool>,
 }
 
 // ===========================================================================
@@ -220,6 +238,8 @@ pub struct Settings {
     pub clipboard_clear_sec: i64,
     /// Wave 5 — tampilkan ikon situs (favicon) di daftar vault.
     pub show_icons: bool,
+    /// Scheduler backup otomatis (tiap 24 jam selama app berjalan).
+    pub auto_backup_enabled: bool,
 }
 
 /// Statistik dashboard (`dashboard_stats`).

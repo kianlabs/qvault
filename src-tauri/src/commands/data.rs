@@ -95,6 +95,9 @@ pub fn export_backup(state: State<'_, AppState>, path: String, password: String)
 
 /// Isi `export_backup` tanpa wrapper `State` (agar bisa diuji runtime).
 pub(crate) fn export_backup_impl(state: &AppState, path: String, password: String) -> Result<()> {
+    // Validasi password.
+    crate::commands::security::validate_password(&password)?;
+
     // Bangun JSON dari semua tabel.
     let payload = state.db.with(|conn| {
         let mut tables = Map::new();
@@ -138,6 +141,9 @@ pub fn import_backup(state: State<'_, AppState>, path: String, password: String)
 
 /// Isi `import_backup` tanpa wrapper `State` (agar bisa diuji runtime).
 pub(crate) fn import_backup_impl(state: &AppState, path: String, password: String) -> Result<()> {
+    // Validasi password.
+    crate::commands::security::validate_password(&password)?;
+
     let contents = std::fs::read_to_string(&path)?;
     let rest = contents
         .trim()
@@ -157,6 +163,13 @@ pub(crate) fn import_backup_impl(state: &AppState, path: String, password: Strin
 
     let root: Value = serde_json::from_slice(&plain)
         .map_err(|e| AppError::Msg(format!("isi backup tidak valid: {e}")))?;
+
+    // Validasi version.
+    let version = root.get("version").and_then(Value::as_u64);
+    if version != Some(1) {
+        return Err(AppError::Msg("versi backup tidak didukung".into()));
+    }
+
     let tables = root
         .get("tables")
         .and_then(Value::as_object)
@@ -911,6 +924,7 @@ mod tests {
             db: crate::db::open_in_memory().expect("in-memory db"),
             vault_key: std::sync::Mutex::new(None),
             degraded: None,
+            unlock_fails: std::sync::Mutex::new(crate::state::UnlockGuard::default()),
         }
     }
 
@@ -1281,5 +1295,56 @@ mod tests {
                 Ok(())
             })
             .unwrap();
+    }
+
+    #[test]
+    fn export_backup_rejects_short_password() {
+        let state = test_state();
+        let dek_key = random_key();
+        *state.vault_key.lock().unwrap() = Some(dek_key.clone());
+        seed(&state, &dek_key);
+
+        let path = std::env::temp_dir().join("qvault_test_short_pw.qvlt");
+        let path = path.to_string_lossy().to_string();
+
+        // Password terlalu pendek → error.
+        let result = export_backup_impl(&state, path, "short".into());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn import_backup_rejects_unsupported_version() {
+        let state = test_state();
+        let dek_key = random_key();
+        *state.vault_key.lock().unwrap() = Some(dek_key.clone());
+
+        // Buat file backup manual dengan version 999.
+        let payload = json!({
+            "version": 999,
+            "exportedAt": now(),
+            "tables": {
+                "vault_items": [],
+            }
+        });
+        let json_bytes = serde_json::to_vec(&payload).unwrap();
+
+        let password = "valid-password";
+        let salt = new_salt();
+        let key_bytes = derive_key(password, &salt).unwrap();
+        let key = Key(key_bytes);
+        let blob = encrypt(&key, &json_bytes).unwrap();
+
+        let contents = format!("QVLTBK1:{}:{}", b64_encode(&salt), blob);
+        let path = std::env::temp_dir().join("qvault_test_version999.qvlt");
+        std::fs::write(&path, contents).unwrap();
+
+        // Import dengan version 999 → error.
+        let result =
+            import_backup_impl(&state, path.to_string_lossy().to_string(), password.into());
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("versi backup tidak didukung"));
     }
 }

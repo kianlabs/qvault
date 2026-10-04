@@ -14,9 +14,3 @@ pub mod kdf;
 pub use cipher::{decrypt, encrypt, random_key, Key};
 #[allow(unused_imports)]
 pub use kdf::{derive_key, new_salt};
-
-/// Panjang salt (byte) untuk Argon2id.
-pub const SALT_LEN: usize = 16;
-
-/// Panjang kunci (byte) — 32 byte = AES-256.
-pub const KEY_LEN: usize = 32;

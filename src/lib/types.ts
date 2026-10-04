@@ -176,6 +176,8 @@ export interface Settings {
   clipboardClearSec: number;
   /** Wave 5 — tampilkan ikon situs (favicon) di daftar vault. */
   showIcons: boolean;
+  /** Scheduler backup otomatis (tiap 24 jam selama app berjalan). */
+  autoBackupEnabled: boolean;
 }
 
 /** `update_settings` payload (partial merge of the settings fields). */

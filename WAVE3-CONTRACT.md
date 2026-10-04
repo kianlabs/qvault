@@ -227,9 +227,9 @@ Parser minimal AMAN (TANPA `dangerouslySetInnerHTML`): dukung
 Kembalikan elemen React (`<h1>`, `<p>`, `<ul>`, `<code>`, …) — bukan string HTML.
 
 **`src/lib/favicon.ts`** (baru): export `faviconUrl(url: string | null | undefined): string | null`
-dan `avatarInitials` bila perlu. `faviconUrl` mengembalikan
-`https://www.google.com/s2/favicons?domain=<host>&sz=64` (host dari `hostnameFromUrl` di utils),
-atau `null` bila url kosong.
+dan `avatarInitials` bila perlu. **`faviconUrl` SELALU mengembalikan `null`** (kebijakan privasi 
+local-first: tidak ada permintaan jaringan ke google.com atau layanan pihak ketiga). Avatar jatuh 
+ke inisial lokal yang dihitung dari `title`.
 
 **`NotesPage.tsx`**: TAMBAHKAN toggle **Write / Preview** di editor. Mode Preview memakai
 `renderMarkdown(content)` di area baca yang rapi (`prose`-style manual: spacing heading/paragraf).

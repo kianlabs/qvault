@@ -31,15 +31,7 @@ impl Db {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         f(&guard)
     }
-
-    /// Akses langsung ke koneksi (escape hatch; tetap lewat mutex).
-    pub fn conn(&self) -> std::sync::MutexGuard<'_, Connection> {
-        self.conn
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-    }
 }
-
 /// Buka (atau buat) database pada `path` lalu inisialisasi schema.
 pub fn open(path: impl AsRef<Path>) -> Result<Db> {
     let path = path.as_ref();

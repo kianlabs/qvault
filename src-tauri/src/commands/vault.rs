@@ -101,12 +101,12 @@ pub fn list_vault_items(
     })
 }
 
-#[tauri::command]
-pub fn create_vault_item(
-    state: State<'_, AppState>,
+/// Implementasi testable untuk create_vault_item.
+pub(crate) fn create_vault_item_impl(
+    state: &AppState,
     payload: VaultItemPayload,
 ) -> Result<VaultItem> {
-    let key = dek(&state)?;
+    let key = dek(state)?;
     let id = new_id();
     let ts = now();
     state.db.with(|conn| {
@@ -129,11 +129,93 @@ pub fn create_vault_item(
                 payload.icon,
                 ts,
                 ts,
-                enc_opt(&key, &payload.totp)?,
+                // Tri-state: None/Some(None) → NULL, Some(Some(s)) → encrypted.
+                enc_opt(&key, &payload.totp.flatten())?,
             ],
         )?;
         log_activity(conn, "vault", "create", Some(&payload.title))?;
         fetch_item(conn, &key, &id)
+    })
+}
+
+#[tauri::command]
+pub fn create_vault_item(
+    state: State<'_, AppState>,
+    payload: VaultItemPayload,
+) -> Result<VaultItem> {
+    create_vault_item_impl(&state, payload)
+}
+
+/// Implementasi testable untuk update_vault_item.
+pub(crate) fn update_vault_item_impl(
+    state: &AppState,
+    id: &str,
+    payload: VaultItemPayload,
+) -> Result<VaultItem> {
+    let key = dek(state)?;
+    let ts = now();
+    let title = payload.title.clone(); // Clone untuk log_activity setelah payload di-move.
+    state.db.with(|conn| {
+        // Wave 4: kolom totp_enc wajib ada sebelum UPDATE.
+        ensure_column(conn, "vault_items", "totp_enc", "TEXT")?;
+
+        // Tri-state TOTP:
+        // - None → field absen, JANGAN sentuh kolom totp_enc (preserve).
+        // - Some(v) → update totp_enc = enc_opt(&key, &v).
+        let n = match &payload.totp {
+            None => {
+                // Field absen → JANGAN sertakan totp_enc di UPDATE.
+                conn.execute(
+                    "UPDATE vault_items SET
+                        title = ?1, username_enc = ?2, password_enc = ?3, url = ?4, notes_enc = ?5,
+                        tags = ?6, folder_id = ?7, favorite = ?8, icon = ?9, updated_at = ?10
+                     WHERE id = ?11",
+                    rusqlite::params![
+                        payload.title,
+                        enc_opt(&key, &payload.username)?,
+                        enc_opt(&key, &payload.password)?,
+                        payload.url,
+                        enc_opt(&key, &payload.notes)?,
+                        tags_to_json(&payload.tags),
+                        payload.folder_id,
+                        payload.favorite as i64,
+                        payload.icon,
+                        ts,
+                        id,
+                    ],
+                )?
+            }
+            Some(v) => {
+                // Some(None) → NULL, Some(Some(s)) → encrypted.
+                conn.execute(
+                    "UPDATE vault_items SET
+                        title = ?1, username_enc = ?2, password_enc = ?3, url = ?4, notes_enc = ?5,
+                        tags = ?6, folder_id = ?7, favorite = ?8, icon = ?9, updated_at = ?10,
+                        totp_enc = ?11
+                     WHERE id = ?12",
+                    rusqlite::params![
+                        payload.title,
+                        enc_opt(&key, &payload.username)?,
+                        enc_opt(&key, &payload.password)?,
+                        payload.url,
+                        enc_opt(&key, &payload.notes)?,
+                        tags_to_json(&payload.tags),
+                        payload.folder_id,
+                        payload.favorite as i64,
+                        payload.icon,
+                        ts,
+                        enc_opt(&key, v)?,
+                        id,
+                    ],
+                )?
+            }
+        };
+
+        if n == 0 {
+            return Err(AppError::Msg(format!("item vault tidak ditemukan: {id}")));
+        }
+        log_activity(conn, "vault", "update", Some(&title))?;
+        fetch_item(conn, &key, id)
     })
 }
 
@@ -143,39 +225,7 @@ pub fn update_vault_item(
     id: String,
     payload: VaultItemPayload,
 ) -> Result<VaultItem> {
-    let key = dek(&state)?;
-    let ts = now();
-    state.db.with(|conn| {
-        // Wave 4: kolom totp_enc wajib ada sebelum UPDATE.
-        ensure_column(conn, "vault_items", "totp_enc", "TEXT")?;
-        let n = conn.execute(
-            "UPDATE vault_items SET
-                title = ?1, username_enc = ?2, password_enc = ?3, url = ?4, notes_enc = ?5,
-                tags = ?6, folder_id = ?7, favorite = ?8, icon = ?9, updated_at = ?10,
-                totp_enc = ?11
-             WHERE id = ?12",
-            rusqlite::params![
-                payload.title,
-                enc_opt(&key, &payload.username)?,
-                enc_opt(&key, &payload.password)?,
-                payload.url,
-                enc_opt(&key, &payload.notes)?,
-                tags_to_json(&payload.tags),
-                payload.folder_id,
-                payload.favorite as i64,
-                payload.icon,
-                ts,
-                // Kontrak E.3: tulis apa adanya (None → NULL).
-                enc_opt(&key, &payload.totp)?,
-                id,
-            ],
-        )?;
-        if n == 0 {
-            return Err(AppError::Msg(format!("item vault tidak ditemukan: {id}")));
-        }
-        log_activity(conn, "vault", "update", Some(&payload.title))?;
-        fetch_item(conn, &key, &id)
-    })
+    update_vault_item_impl(&state, &id, payload)
 }
 
 #[tauri::command]
@@ -229,3 +279,7 @@ pub fn reveal_vault_password(state: State<'_, AppState>, id: String) -> Result<S
         Ok(dec_str(&key, &blob))
     })
 }
+
+#[cfg(test)]
+#[path = "vault_test.rs"]
+mod tests;

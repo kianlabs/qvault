@@ -20,11 +20,14 @@ pub fn get_settings(state: State<'_, AppState>) -> Result<Settings> {
         let avatar = get_setting(conn, "avatar")?;
         let theme = get_setting(conn, "theme")?.unwrap_or_else(|| "dark".to_string());
         let accent = get_setting(conn, "accent")?.unwrap_or_else(|| "slate".to_string());
-        let font_size = parse_i64(get_setting(conn, "font_size")?).unwrap_or(14);
+        let font_size = parse_i64(get_setting(conn, "font_size")?).unwrap_or(15);
         let auto_lock_min = parse_i64(get_setting(conn, "auto_lock_min")?).unwrap_or(15);
         let clipboard_clear_sec =
             parse_i64(get_setting(conn, "clipboard_clear_sec")?).unwrap_or(30);
         let show_icons = get_setting(conn, "show_icons")?
+            .map(|s| s != "0" && s != "false")
+            .unwrap_or(true);
+        let auto_backup_enabled = get_setting(conn, "auto_backup_enabled")?
             .map(|s| s != "0" && s != "false")
             .unwrap_or(true);
 
@@ -37,6 +40,7 @@ pub fn get_settings(state: State<'_, AppState>) -> Result<Settings> {
             auto_lock_min,
             clipboard_clear_sec,
             show_icons,
+            auto_backup_enabled,
         })
     })
 }
@@ -68,6 +72,9 @@ pub fn update_settings(state: State<'_, AppState>, payload: SettingsPayload) -> 
         }
         if let Some(v) = payload.show_icons {
             set_setting(conn, "show_icons", if v { "1" } else { "0" })?;
+        }
+        if let Some(v) = payload.auto_backup_enabled {
+            set_setting(conn, "auto_backup_enabled", if v { "1" } else { "0" })?;
         }
         log_activity(conn, "settings", "update", None)?;
         Ok(())

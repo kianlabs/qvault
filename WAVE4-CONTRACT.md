@@ -29,8 +29,8 @@ export async function secureCopy(text: string, clearAfterSec: number): Promise<v
 - Jadwalkan `setTimeout` (ms = clearAfterSec*1000, min 5s) yang menulis string kosong `""` ke clipboard
   **hanya bila isi clipboard masih sama** (baca `navigator.clipboard.readText()` di dalam try/catch —
   bila gagal karena izin, tetap kosongkan; jangan melempar).
-- Simpan id timer di modul-level Map agar copy berikutnya membatalkan timer lama (jangan hapus clipboard baru).
-- Export juga `cancelClipboardClear()`.
+- **Tiap copy memiliki timer sendiri** — copy kedua TIDAK membatalkan jadwal clear dari copy pertama; 
+  keduanya berjalan independen. `cancelClipboardClear()` membatalkan semua timer aktif sekaligus.
 
 ### A.2 `src/components/ErrorBoundary.tsx` (baru)
 Class component React, `componentDidCatch` + `getDerivedStateFromError`. Saat error: tampilkan kartu
@@ -210,7 +210,9 @@ Ya — `commands/mod.rs` milikmu. Lakukan itu.
 
 ### E.2 `models.rs`
 - `VaultItem`: tambah `pub has_totp: bool` (serde camelCase → `hasTotp`).
-- `VaultItemPayload`: tambah `#[serde(default)] pub totp: Option<String>`.
+- `VaultItemPayload`: tambah `#[serde(default)] pub totp: Option<Option<String>>` — tri-state:
+  field **ABSEN** (None outer) = jangan sentuh kolom `totp_enc`; `Some(None)` = hapus (NULL);
+  `Some(Some(secret))` = set secret baru.
 - Tambah:
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -224,8 +226,11 @@ pub struct TotpStatus { pub has_secret: bool }
 
 ### E.3 `commands/vault.rs`
 - `COLS` tambah `totp_enc`; `map_row` set `has_totp: row.get::<_, Option<String>>(12)?.map(|s| !s.is_empty()).unwrap_or(false)`.
-- `create_vault_item` / `update_vault_item`: simpan `enc_opt(&key, &payload.totp)` ke kolom `totp_enc`
-  (bila payload.totp None → tetap None, JANGAN hapus yang lama saat update kosong? Sederhana: tulis apa adanya).
+- `create_vault_item`: simpan `enc_opt(&key, &payload.totp.flatten())` ke kolom `totp_enc` 
+  (flatten: `None` atau `Some(None)` → `None`; `Some(Some(s))` → `Some(s)`).
+- `update_vault_item`: **tri-state eksplisit** — bila `payload.totp` adalah `None` (field ABSEN dari 
+  JSON), jangan sentuh kolom `totp_enc` (skip dari UPDATE SET clause); bila `Some(None)` → set NULL; 
+  bila `Some(Some(secret))` → enkripsi dan set. Ini mencegah bug C1 (secret terhapus saat update tanpa field totp).
 - Panggil `super::ensure_column(conn, "vault_items", "totp_enc", "TEXT")` di awal `list_vault_items` &
   `create_vault_item` sebelum query.
 

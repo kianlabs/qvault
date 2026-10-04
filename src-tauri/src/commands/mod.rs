@@ -186,6 +186,7 @@ pub(crate) mod tests_support {
             db: crate::db::open_in_memory().expect("in-memory db"),
             vault_key: std::sync::Mutex::new(None),
             degraded: None,
+            unlock_fails: std::sync::Mutex::new(crate::state::UnlockGuard::default()),
         }
     }
 }
@@ -208,6 +209,7 @@ mod tests {
             db: crate::db::open_in_memory().expect("in-memory db"),
             vault_key: std::sync::Mutex::new(None),
             degraded: None,
+            unlock_fails: std::sync::Mutex::new(crate::state::UnlockGuard::default()),
         }
     }
 

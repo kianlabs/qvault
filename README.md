@@ -44,7 +44,7 @@ No cloud, no telemetry — your data never leaves the device.
   missing-password / no-2FA breakdowns and one-click jump to fix.
 - **Command palette** — `Ctrl/Cmd + K` to search and jump across every module.
 - **2FA (TOTP)** — RFC 6238 one-time codes stored encrypted, with live countdown.
-- **Backup** — encrypted DB snapshots (`VACUUM INTO`), on demand plus daily via a system timer; keeps the last 5.
+- **Backup** — encrypted DB snapshots (`VACUUM INTO`), on demand plus once every 24 hours while the app is running; keeps the last 5.
 
 ## Tech stack
 

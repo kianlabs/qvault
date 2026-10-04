@@ -19,13 +19,6 @@ const NONCE_LEN: usize = 12;
 #[derive(Clone)]
 pub struct Key(pub [u8; 32]);
 
-impl Key {
-    /// Akses byte mentah kunci.
-    pub fn as_bytes(&self) -> &[u8; 32] {
-        &self.0
-    }
-}
-
 impl Drop for Key {
     fn drop(&mut self) {
         self.0.zeroize();

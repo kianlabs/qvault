@@ -3,17 +3,17 @@
 // Kalau isi clipboard sudah berubah (user copy hal lain), JANGAN dikosongkan.
 
 /**
- * Timer id disimpan di Map level-modul. Map dipakai supaya copy berikutnya bisa
- * membatalkan timer lama — jadi teks baru tidak ikut terhapus oleh jadwal lama.
+ * Timer id disimpan di Map level-modul. Setiap copy mendapat key unik sehingga
+ * copy berikutnya TIDAK membatalkan jadwal copy sebelumnya. cancelClipboardClear
+ * membatalkan SEMUA timer aktif.
  */
 const timers = new Map<string, number>();
 
-/** Slot tunggal: cuma boleh ada satu jadwal auto-clear aktif pada satu waktu. */
-const SLOT = "active";
+/** Counter untuk membuat key unik per copy. */
+let nextTimerId = 0;
 
 /** Batas minimum auto-clear (detik) supaya teks tidak keburu hilang. */
 const MIN_CLEAR_SEC = 5;
-
 /**
  * Copy `text` ke clipboard lalu OTOMATIS hapus setelah `clearAfterSec` detik.
  * Pengosongan hanya dilakukan bila clipboard masih berisi `text` yang sama
@@ -31,24 +31,21 @@ export async function secureCopy(
     Math.floor(Number(clearAfterSec)) || MIN_CLEAR_SEC,
   );
 
-  // Batalkan jadwal lama sebelum memasang yang baru.
-  cancelClipboardClear();
-
+  const key = `timer-${nextTimerId++}`;
   const id = window.setTimeout(() => {
-    timers.delete(SLOT);
+    timers.delete(key);
     void clearIfUnchanged(text);
   }, seconds * 1000);
 
-  timers.set(SLOT, id);
+  timers.set(key, id);
 }
 
-/** Batalkan jadwal auto-clear yang masih aktif (bila ada). */
+/** Batalkan SEMUA jadwal auto-clear yang masih aktif. */
 export function cancelClipboardClear(): void {
-  const id = timers.get(SLOT);
-  if (id !== undefined) {
+  for (const id of timers.values()) {
     window.clearTimeout(id);
-    timers.delete(SLOT);
   }
+  timers.clear();
 }
 
 /**

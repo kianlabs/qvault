@@ -43,8 +43,8 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   setTheme: (theme) => {
     set({ theme });
     cacheTheme(theme);
-    void api.updateSettings({ theme }).catch(() => {
-      /* diamkan: UI tetap responsif; settings akan tersinkron lagi */
+    void api.updateSettings({ theme }).catch((e) => {
+      console.warn("gagal menyimpan tema", e);
     });
   },
 

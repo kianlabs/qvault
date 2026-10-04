@@ -48,12 +48,24 @@ function useAutoLock(enabled: boolean, minutes: number) {
       timer.current = window.setTimeout(() => void lock(), minutes * 60_000);
     };
 
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") void lock();
+    };
+
+    const onBlur = () => {
+      void lock();
+    };
+
     const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"];
     events.forEach((e) => window.addEventListener(e, arm, { passive: true }));
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("blur", onBlur);
     arm();
 
     return () => {
       events.forEach((e) => window.removeEventListener(e, arm));
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("blur", onBlur);
       if (timer.current) window.clearTimeout(timer.current);
     };
   }, [enabled, minutes, lock]);
@@ -82,7 +94,7 @@ function Shell() {
 
   const theme = useThemeStore((s) => s.theme);
   const syncTheme = useThemeStore((s) => s.sync);
-  const fontSize = settings?.fontSize ?? 16;
+  const fontSize = settings?.fontSize ?? 15;
   const accent = settings?.accent ?? DEFAULT_ACCENT;
   const autoLockMin = settings?.autoLockMin ?? 0;
 
