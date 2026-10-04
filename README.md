@@ -55,7 +55,7 @@ No cloud, no telemetry — your data never leaves the device.
 | Frontend         | React 19, TypeScript, React Router, Zustand             |
 | Styling          | Tailwind CSS 4                                          |
 | Motion           | Web Animations API + View Transitions API (native)      |
-| Icons / charts   | lucide-react, Recharts                                  |
+| Icons / charts   | lucide-react, hand-rolled CSS/Tailwind charts           |
 | Storage          | SQLite (local file)                                     |
 | Build / tooling  | Vite, Bun, Cargo                                        |
 
