@@ -55,8 +55,8 @@ Lalu pasang `ref={listRef}` pada elemen pembungkus daftar/grid.
    `clip-path: circle()` yang mengembang dari pusat tombol toggle
    (`data-theme-toggle`, dipasang di `Sidebar.tsx`). Radius = jarak ke sudut
    viewport terjauh.
-3. Durasi reveal **520 ms**, easing `ease-in-out`, dianimasikan pada
-   `::view-transition-new(root)`.
+3. Durasi reveal **800 ms** (paritas web CV), easing `ease-in-out`,
+   dianimasikan pada `::view-transition-new(root)`.
 4. Bila API tak tersedia atau reduced-motion aktif → `apply()` dijalankan
    langsung, pergantian tetap instan tanpa kedip (fallback aman).
 
