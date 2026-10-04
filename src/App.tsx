@@ -27,7 +27,7 @@ import SettingsPage from "./features/settings/SettingsPage";
 import { useAuthStore } from "./store/useAuthStore";
 import { useSettingsStore } from "./store/useSettingsStore";
 import { isDarkTheme, useThemeStore } from "./store/useThemeStore";
-import { pageEnter } from "./lib/motion";
+import { pageEnter, themeSwap } from "./lib/motion";
 import { DEFAULT_ACCENT, applyAccent } from "./lib/accents";
 
 /**
@@ -64,6 +64,8 @@ function Shell() {
   const { locked, degraded, refreshStatus } = useAuthStore();
   const { settings, load: loadSettings } = useSettingsStore();
   const pageRef = useRef<HTMLDivElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const firstThemeRun = useRef(true);
 
   // Transisi halaman: konten masuk halus setiap rute berubah.
   useEffect(() => {
@@ -99,6 +101,14 @@ function Shell() {
     presets.forEach((p) => root.classList.remove(p));
     root.classList.add(theme);
     if (theme === "slate" || theme === "nord") root.classList.add("dark");
+
+    // Efek GSAP saat berganti tema — lewati render pertama (agar tidak berkedip
+    // saat aplikasi baru dibuka). Overlay fade + konten "mendarat" halus.
+    if (firstThemeRun.current) {
+      firstThemeRun.current = false;
+      return;
+    }
+    themeSwap(shellRef.current);
   }, [theme]);
 
   // Font size + accent. Aksen diresolusi (nama preset / hex) lalu diterapkan
@@ -117,7 +127,7 @@ function Shell() {
   }
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-bg text-ink">
+    <div ref={shellRef} className="flex h-full w-full overflow-hidden bg-bg text-ink">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />

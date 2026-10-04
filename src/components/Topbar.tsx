@@ -3,10 +3,8 @@
 // adalah tombol yang membuka Command Palette sungguhan via event global.
 // Tombol tema menukar terang/gelap seketika.
 import { useNavigate } from "react-router-dom";
-import { Lock, Moon, Search, Sun } from "lucide-react";
+import { Lock, Search } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
-import { isDarkTheme, useThemeStore } from "../store/useThemeStore";
-import { IconButton } from "./ui";
 
 /** Nama event global untuk membuka Command Palette dari mana saja. */
 export const OPEN_PALETTE_EVENT = "qvault:open-palette";
@@ -18,10 +16,6 @@ function isMac() {
 export default function Topbar() {
   const navigate = useNavigate();
   const lock = useAuthStore((s) => s.lock);
-  const theme = useThemeStore((s) => s.theme);
-  const toggleTheme = useThemeStore((s) => s.toggle);
-
-  const dark = isDarkTheme(theme);
 
   async function handleLock() {
     try {
@@ -46,11 +40,6 @@ export default function Topbar() {
       </button>
 
       <div className="ml-auto flex items-center gap-1.5">
-        <IconButton
-          icon={dark ? Sun : Moon}
-          label={dark ? "Switch to light mode" : "Switch to dark mode"}
-          onClick={toggleTheme}
-        />
         <button
           type="button"
           onClick={handleLock}

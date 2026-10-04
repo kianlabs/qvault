@@ -3,6 +3,23 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ===========================================================================
+   Font — JetBrains Mono (paritas KeepR)
+   ---------------------------------------------------------------------------
+   KeepR memakai JetBrains Mono untuk SELURUH antarmuka (chrome + body).
+   Di-self-host (bukan CDN pihak ketiga) agar QVAULT tetap local-first &
+   offline: tidak ada permintaan font ke jaringan luar. File = variable font
+   (weight 100–800), latin subset.
+   =========================================================================== */
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-latin.woff2") format("woff2");
+}
+
+
+/* ===========================================================================
    QVAULT — Design System "Slate Calm" (paritas KeepR)
    ---------------------------------------------------------------------------
    Prinsip: tenang tapi presisi. Kanvas terang off-white hangat, panel putih
@@ -51,6 +68,12 @@
   --radius-lg: 10px;
   --radius-xl: 14px;
   --radius-2xl: 16px;
+
+  /* --- typography (paritas KeepR: JetBrains Mono di mana-mana) --- */
+  --font-sans: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo,
+    Consolas, "Liberation Mono", monospace;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo,
+    Consolas, "Liberation Mono", monospace;
 }
 
 /* ---------------------------------------------------------------------------
@@ -173,8 +196,8 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    Helvetica, Arial, sans-serif;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo,
+    Consolas, "Liberation Mono", monospace;
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;

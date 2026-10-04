@@ -76,6 +76,46 @@ export function pulse(el: Element | null): void {
   );
 }
 
+/**
+ * Transisi halus saat tema terang ⇄ gelap ditukar.
+ *
+ * Menimpa (overlay) seluruh viewport dengan warna kanvas tema BARU lalu
+ * memudarkannya, sekaligus membuat konten "mendarat" lembut (skala 0.995 → 1).
+ * Hanya menyentuh `opacity` + `transform` (GPU-friendly) dan menghormati
+ * reduced-motion. Tidak memblokir input (overlay `pointer-events: none`).
+ */
+export function themeSwap(content: Element | null): void {
+  if (!motionOK || typeof document === "undefined") return;
+
+  const bg =
+    getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() || "#121417";
+
+  const overlay = document.createElement("div");
+  overlay.setAttribute("aria-hidden", "true");
+  overlay.style.cssText =
+    `position:fixed;inset:0;background:${bg};pointer-events:none;z-index:9999;`;
+  document.body.appendChild(overlay);
+
+  gsap.fromTo(
+    overlay,
+    { autoAlpha: 0.9 },
+    {
+      autoAlpha: 0,
+      duration: 0.34,
+      ease: "power2.out",
+      onComplete: () => overlay.remove(),
+    },
+  );
+
+  if (content) {
+    gsap.fromTo(
+      content,
+      { scale: 0.994 },
+      { scale: 1, duration: 0.34, ease: "power2.out", clearProps: "transform" },
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Hooks
 // ---------------------------------------------------------------------------
