@@ -7,8 +7,11 @@
 # memegang token dan menyajikan aset ini ke app yang terpasang.
 #
 # Rahasia yang dibutuhkan (Settings → Secrets → Actions):
-#   TAURI_SIGNING_PRIVATE_KEY          isi file ~/.tauri/qvault.key
-#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD password kunci (kosong bila tanpa password)
+#   TAURI_SIGNING_PRIVATE_KEY   ISI file ~/.tauri/qvault.key (bukan path)
+#
+# Kunci qvault.key dibuat TANPA password, jadi TIDAK ada env password di sini.
+# Bila kelak kunci dibuat berpassword, tambahkan env
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 #
 # CATATAN: jangan menyentuh ci.yml — workflow ini terpisah.
 
@@ -71,7 +74,6 @@ jobs:
       - name: Build AppImage (signed)
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: bunx tauri build --bundles appimage
 
       - name: Generate latest.json

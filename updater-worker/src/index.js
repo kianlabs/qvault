@@ -77,10 +77,19 @@ function findAsset(release, name) {
 }
 
 async function fetchAsset(asset, headers) {
+  // GitHub mengembalikan 302 ke URL S3 bertanda tangan. Kirim token HANYA ke
+  // api.github.com; saat mengikuti redirect, JANGAN sertakan Authorization.
   const res = await fetch(asset.url, {
     headers: { ...headers, Accept: "application/octet-stream" },
-    redirect: "follow",
+    redirect: "manual",
   });
+  if (res.status >= 300 && res.status < 400) {
+    const location = res.headers.get("location");
+    if (!location) return null;
+    const followed = await fetch(location);
+    if (!followed.ok) return null;
+    return followed.body;
+  }
   if (!res.ok) return null;
   return res.body;
 }
