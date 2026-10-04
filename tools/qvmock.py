@@ -5,7 +5,7 @@ implementasi palsu yang mengembalikan data dashboard sehingga UI bisa
 dirender penuh tanpa backend Rust.
 """
 
-APP = "http://127.0.0.1:1420/"
+APP = "http://localhost:1420/"
 
 MOCK = r"""
 () => {
