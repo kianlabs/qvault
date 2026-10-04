@@ -97,18 +97,25 @@ function Shell() {
   // Terapkan tema ke <html>: kelas preset + varian `dark` untuk keluarga gelap.
   useEffect(() => {
     const root = document.documentElement;
+
+    // Baca warna kanvas tema LAMA SEBELUM kelas ditukar — dipakai sebagai veil
+    // transisi (kalau dibaca setelah swap, veil sama dengan latar baru → tak
+    // terlihat).
+    const fromBg =
+      getComputedStyle(root).getPropertyValue("--bg").trim() || "#121417";
+
     const presets = ["light", "dark", "slate", "nord", "sepia"];
     presets.forEach((p) => root.classList.remove(p));
     root.classList.add(theme);
     if (theme === "slate" || theme === "nord") root.classList.add("dark");
 
     // Efek GSAP saat berganti tema — lewati render pertama (agar tidak berkedip
-    // saat aplikasi baru dibuka). Overlay fade + konten "mendarat" halus.
+    // saat aplikasi baru dibuka). Veil cross-fade + konten "mendarat" halus.
     if (firstThemeRun.current) {
       firstThemeRun.current = false;
       return;
     }
-    themeSwap(shellRef.current);
+    themeSwap(fromBg, shellRef.current);
   }, [theme]);
 
   // Font size + accent. Aksen diresolusi (nama preset / hex) lalu diterapkan

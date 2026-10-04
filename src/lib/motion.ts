@@ -79,39 +79,50 @@ export function pulse(el: Element | null): void {
 /**
  * Transisi halus saat tema terang ⇄ gelap ditukar.
  *
- * Menimpa (overlay) seluruh viewport dengan warna kanvas tema BARU lalu
- * memudarkannya, sekaligus membuat konten "mendarat" lembut (skala 0.995 → 1).
- * Hanya menyentuh `opacity` + `transform` (GPU-friendly) dan menghormati
- * reduced-motion. Tidak memblokir input (overlay `pointer-events: none`).
+ * Caranya: tutup seluruh viewport dengan warna kanvas tema LAMA (`fromBg`),
+ * lalu memudarkannya (fade-out) sehingga tema BARU yang sudah terpasang di
+ * belakangnya terungkap mulus — efek cross-fade satu layar penuh. Ini membuat
+ * perpindahan terang↔gelap terlihat jelas (bukan sekadar "kedip").
+ *
+ * Penting: `fromBg` HARUS dibaca SEBELUM class tema di `<html>` ditukar, kalau
+ * tidak warna veil akan sama dengan latar baru dan animasinya tak terlihat.
+ *
+ * Fade opacity tetap dijalankan walau OS meminta reduced-motion (opacity aman;
+ * yang dihindari adalah gerak/scale) — hanya efek `scale` konten yang di-gate.
+ * Veil `pointer-events: none` sehingga tidak memblokir input.
  */
-export function themeSwap(content: Element | null): void {
-  if (!motionOK || typeof document === "undefined") return;
+export function themeSwap(fromBg: string, content: Element | null): void {
+  if (typeof document === "undefined") return;
 
-  const bg =
-    getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() || "#121417";
+  // Buang veil lama bila pengguna menukar tema beruntun (hindari tumpukan).
+  const prev = document.getElementById("qv-theme-veil");
+  if (prev) {
+    gsap.killTweensOf(prev);
+    prev.remove();
+  }
 
-  const overlay = document.createElement("div");
-  overlay.setAttribute("aria-hidden", "true");
-  overlay.style.cssText =
-    `position:fixed;inset:0;background:${bg};pointer-events:none;z-index:9999;`;
-  document.body.appendChild(overlay);
+  const veil = document.createElement("div");
+  veil.id = "qv-theme-veil";
+  veil.setAttribute("aria-hidden", "true");
+  veil.style.cssText =
+    `position:fixed;inset:0;background:${fromBg};pointer-events:none;z-index:9999;`;
+  document.body.appendChild(veil);
 
-  gsap.fromTo(
-    overlay,
-    { autoAlpha: 0.9 },
-    {
-      autoAlpha: 0,
-      duration: 0.34,
-      ease: "power2.out",
-      onComplete: () => overlay.remove(),
-    },
-  );
+  // Mulai dari opaque penuh (sinkron, sebelum paint) agar tak ada kedip tema baru.
+  gsap.set(veil, { autoAlpha: 1 });
+  gsap.to(veil, {
+    autoAlpha: 0,
+    duration: 0.45,
+    ease: "power2.inOut",
+    onComplete: () => veil.remove(),
+  });
 
-  if (content) {
+  // Konten "mendarat" lembut — hanya bila gerak diizinkan.
+  if (content && motionOK) {
     gsap.fromTo(
       content,
-      { scale: 0.994 },
-      { scale: 1, duration: 0.34, ease: "power2.out", clearProps: "transform" },
+      { scale: 0.988 },
+      { scale: 1, duration: 0.45, ease: "power2.out", clearProps: "transform" },
     );
   }
 }
