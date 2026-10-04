@@ -31,7 +31,7 @@ Semua temuan ditutup. Verifikasi segar pasca-perbaikan: `cargo fmt --check` (0),
 | L12 | Clone `Key` (hardening) | ✅ Diverifikasi aman | `.clone()` di `dek()` hanya clone `Option` di luar lock lalu drop (zeroize); tidak diubah |
 | D1 | Drift favicon | ✅ FIXED (kontrak) | `WAVE3-CONTRACT.md` §D diselaraskan: `faviconUrl` selalu `null` (privasi) |
 
-> **Catatan operasional:** binary rilis yang terpasang di PC ini (`src-tauri/target/release/qvault`, dibangun 2026-10-04 15:22) **lebih tua** dari commit perbaikan (`ef58edf`, 18:53). Perlu `bun run tauri build` (atau `cargo build --release`) agar versi terpasang menyamai source yang diperbaiki.
+> **Catatan operasional:** binary rilis yang terpasang di PC ini (`src-tauri/target/release/qvault`) harus dibangun dengan **`bunx tauri build`** (atau `--no-bundle`), **bukan** `cargo build --release` sendirian. `cargo build` tidak menjalankan `beforeBuildCommand` dan build-script Tauri dapat memakai aset `dist/` yang basi, sehingga binary memuat frontend lama. Per 2026-10-04 20:05 binary sudah dibangun ulang dengan `bunx tauri build --no-bundle` setelah `cargo clean -p qvault --release`; aset frontend yang di-embed terbukti identik (SHA256) dengan `dist/` terbaru.
 
 ---
 
