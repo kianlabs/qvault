@@ -1,9 +1,10 @@
 # QVAULT — Rilis otomatis (AppImage + updater).
 #
-# Dipicu saat push tag (mis. v0.2.0). Membangun AppImage bertanda tangan,
-# membuat latest.json yang menunjuk ke worker proxy, lalu mempublikasikan
-# GitHub Release. Worker (updater-worker/) memegang token dan menyajikan
-# aset ini ke app yang terpasang.
+# Dipicu saat push tag (mis. v0.2.0). Tag HARUS sama dengan `version` di
+# src-tauri/tauri.conf.json (ada guard yang gagal bila tidak cocok).
+# Membangun AppImage bertanda tangan, membuat latest.json yang menunjuk ke
+# worker proxy, lalu mempublikasikan GitHub Release. Worker (updater-worker/)
+# memegang token dan menyajikan aset ini ke app yang terpasang.
 #
 # Rahasia yang dibutuhkan (Settings → Secrets → Actions):
 #   TAURI_SIGNING_PRIVATE_KEY          isi file ~/.tauri/qvault.key
@@ -26,6 +27,20 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+
+      # Guard: tag HARUS cocok dengan version di tauri.conf.json. Tanpa ini,
+      # tag v0.2.0 saat config masih 0.1.0 akan menerbitkan latest.json dengan
+      # versi lama → app menganggap "tidak ada update" tanpa peringatan.
+      - name: Verify tag matches config version
+        run: |
+          CONFIG_VERSION="$(jq -r .version src-tauri/tauri.conf.json)"
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$CONFIG_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} tidak cocok dengan versi config ${CONFIG_VERSION}."
+            echo "Naikkan version di src-tauri/tauri.conf.json (dan Cargo.toml/package.json) dulu."
+            exit 1
+          fi
+          echo "Versi cocok: ${CONFIG_VERSION}"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
