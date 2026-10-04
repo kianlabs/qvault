@@ -27,3 +27,5 @@ src-tauri/gen/schemas
 *.njsproj
 *.sln
 *.sw?
+__pycache__/
+tools/__pycache__/

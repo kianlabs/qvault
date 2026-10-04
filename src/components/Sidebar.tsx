@@ -113,6 +113,7 @@ export default function Sidebar() {
         </div>
         <button
           type="button"
+          data-theme-toggle
           onClick={toggleTheme}
           title={dark ? "Switch to light mode" : "Switch to dark mode"}
           aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}

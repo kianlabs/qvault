@@ -3,12 +3,18 @@
 // Prinsip: gerak harus *membantu*, bukan menghibur. Semua animasi hanya
 // menyentuh `opacity` dan `transform` (GPU-friendly), durasinya pendek, dan
 // otomatis dimatikan bila OS meminta reduced-motion. Tak ada animasi yang
-// memblokir input pengguna.
+// memblokir input.
 //
 // Implementasi memakai **Web Animations API (WAAPI) native** — bukan library
 // eksternal. Ini menghapus ~27 KB (gzip) dependensi runtime, animasi berjalan
 // di compositor thread (lebih ringan & mulus), dan bundel jadi lebih ramping.
-// API yang diekspor tetap sama seperti sebelumnya agar pemanggil tak berubah.
+//
+// PENTING (performa scroll): semua animasi masuk memakai `fill: "backwards"`
+// — BUKAN `"both"`. Dengan `"both"`, animasi yang sudah selesai tetap "hidup"
+// dan menahan properti, sehingga tiap elemen dipaksa punya layer komposit
+// permanen; pada WebKitGTK ini membuat scroll tersendat. `"backwards"` hanya
+// menahan keadaan awal selama delay, lalu melepas ke gaya asli saat selesai →
+// nol layer tertinggal, scroll tetap mulus.
 import { useEffect, useRef, type RefObject } from "react";
 
 /** Hormati setelan aksesibilitas OS. */
@@ -26,7 +32,6 @@ export const motionOK = !prefersReducedMotion();
 // Kurva easing (padanan GSAP → cubic-bezier WAAPI)
 // ---------------------------------------------------------------------------
 const EASE_OUT = "cubic-bezier(0.215, 0.61, 0.355, 1)"; // ≈ power2.out
-const EASE_SMOOTH = "cubic-bezier(0.76, 0, 0.24, 1)"; // ≈ expo/quart in-out
 
 // ---------------------------------------------------------------------------
 // Pelacakan animasi untuk pembersihan (dipakai useGsap)
@@ -56,7 +61,7 @@ export function pageEnter(el: Element | null): void {
         { opacity: 0, transform: "translateY(10px)" },
         { opacity: 1, transform: "translateY(0)" },
       ],
-      { duration: 360, easing: EASE_OUT, fill: "both" },
+      { duration: 340, easing: EASE_OUT, fill: "backwards" },
     ),
   );
 }
@@ -89,7 +94,7 @@ export function staggerIn(
           duration: durMs,
           delay: baseDelay + i * staggerMs,
           easing: EASE_OUT,
-          fill: "both",
+          fill: "backwards",
         },
       ),
     );
@@ -106,7 +111,7 @@ export function popIn(el: Element | null): void {
         { opacity: 0, transform: "translateY(6px) scale(0.985)" },
         { opacity: 1, transform: "translateY(0) scale(1)" },
       ],
-      { duration: 220, easing: EASE_OUT, fill: "both" },
+      { duration: 220, easing: EASE_OUT, fill: "backwards" },
     ),
   );
 }
@@ -119,7 +124,7 @@ export function fadeIn(el: Element | null, durationSec = 0.22): void {
     el.animate([{ opacity: 0 }, { opacity: 1 }], {
       duration: durationSec * 1000,
       easing: EASE_OUT,
-      fill: "both",
+      fill: "backwards",
     }),
   );
 }
@@ -140,81 +145,80 @@ export function pulse(el: Element | null): void {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Transisi tema — View Transitions API (paritas web CV)
+// ---------------------------------------------------------------------------
+//
+// Alih-alih menganimasikan DOM (berat: memaksa repaint seluruh shell), kami
+// memakai **View Transitions API**: browser mengambil *snapshot* tema lama &
+// baru, lalu mengungkap tema baru dengan lingkaran `clip-path` yang mengembang
+// dari tombol toggle. Karena yang dianimasikan hanya gambar snapshot di
+// compositor, hasilnya jauh lebih mulus — inilah pola yang dipakai web CV.
+
+type ViewTransitionLike = { ready: Promise<void>; finished: Promise<void> };
+
+/** Durasi reveal (ms). Cukup cepat agar tidak terasa lambat, cukup halus. */
+const THEME_DUR = 520;
+
 /**
- * Transisi "slideshow" saat tema terang ⇄ gelap ditukar.
+ * Tukar tema dengan reveal lingkaran dari `toggleEl`.
  *
- * Caranya: sebuah tirai (curtain) penuh-layar berisi warna kanvas tema LAMA
- * dipasang menutupi viewport, lalu digeser KELUAR ke kiri (translateX -100%)
- * sehingga tema BARU yang sudah terpasang di belakangnya terungkap seperti
- * lembaran yang di-slide. Konten ikut bergeser sedikit dari kanan (parallax)
- * supaya terasa seperti perpindahan slide yang tenang & halus.
- *
- * `fromBg` HARUS dibaca SEBELUM class tema di `<html>` ditukar.
- *
- * Gerak (slide) di-gate oleh reduced-motion; bila gerak dimatikan, tirai tetap
- * dipasang lalu langsung dibuang tanpa animasi (perpindahan tetap instan).
- * Tirai `pointer-events: none` sehingga tidak memblokir input.
+ * `apply` HARUS melakukan mutasi DOM sinkron (menukar class tema di <html>),
+ * karena View Transitions membekukan snapshot tepat sebelum & sesudah callback.
+ * Bila API tak tersedia atau reduced-motion aktif, `apply` dijalankan langsung
+ * tanpa animasi (pergantian tetap instan, tanpa kedip).
  */
-export function themeSwap(fromBg: string, content: Element | null): void {
-  if (typeof document === "undefined") return;
-
-  // Buang tirai lama bila pengguna menukar tema beruntun (hindari tumpukan).
-  const prev = document.getElementById("qv-theme-veil");
-  if (prev) {
-    prev.getAnimations().forEach((a) => a.cancel());
-    prev.remove();
-  }
-
-  const veil = document.createElement("div");
-  veil.id = "qv-theme-veil";
-  veil.setAttribute("aria-hidden", "true");
-  veil.style.cssText =
-    `position:fixed;inset:0;background:${fromBg};pointer-events:none;` +
-    `z-index:9999;will-change:transform;backface-visibility:hidden;`;
-
-  // Tepi depan tirai — garis aksen tipis agar "lembaran" yang bergeser terlihat.
-  const edge = document.createElement("div");
-  edge.style.cssText =
-    "position:absolute;top:0;right:0;width:2px;height:100%;" +
-    "background:linear-gradient(180deg,transparent,var(--accent),transparent);" +
-    "opacity:0.45;";
-  veil.appendChild(edge);
-  document.body.appendChild(veil);
-
-  // Reduced-motion: buang tirai seketika, tanpa gerak.
-  // Cek dinamis saat pemanggilan (bukan nilai cache saat module-load) supaya
-  // setelan OS yang berubah di tengah sesi tetap dihormati.
-  if (prefersReducedMotion()) {
-    veil.remove();
+export function swapTheme(apply: () => void, toggleEl?: Element | null): void {
+  if (typeof document === "undefined") {
+    apply();
     return;
   }
 
-  // Durasi sengaja dibuat lebih lambat & lembut supaya perpindahan terasa
-  // tenang (bukan kedip). Konten menyusul dengan geser kecil + fade.
-  const DUR_MS = 1000;
-  const EASE = EASE_SMOOTH;
+  const start =
+    typeof document.startViewTransition === "function"
+      ? document.startViewTransition.bind(document)
+      : null;
 
-  const veilAnim = veil.animate(
-    [{ transform: "translateX(0)" }, { transform: "translateX(-100%)" }],
-    { duration: DUR_MS, easing: EASE, fill: "forwards" },
-  );
-  veilAnim.finished
-    .then(() => veil.remove())
-    .catch(() => veil.remove());
-  _track(veilAnim);
-
-  if (content) {
-    _cancelOn(content);
-    _track(
-      content.animate(
-        [
-          { opacity: 0.7, transform: "translateX(3.5%)" },
-          { opacity: 1, transform: "translateX(0)" },
-        ],
-        { duration: DUR_MS, easing: EASE, fill: "both" },
-      ),
-    );
+  if (!start || prefersReducedMotion()) {
+    apply();
+    return;
   }
+
+  let vt: ViewTransitionLike;
+  try {
+    vt = start(apply) as unknown as ViewTransitionLike;
+  } catch {
+    // API ada tapi menolak (mis. transisi lain sedang jalan) → fallback instan.
+    apply();
+    return;
+  }
+
+  vt.ready
+    .then(() => {
+      const r = toggleEl?.getBoundingClientRect();
+      const cx = r ? r.left + r.width / 2 : window.innerWidth / 2;
+      const cy = r ? r.top + r.height / 2 : 40;
+      const radius = Math.hypot(
+        Math.max(cx, window.innerWidth - cx),
+        Math.max(cy, window.innerHeight - cy),
+      );
+      document.documentElement.animate(
+        {
+          clipPath: [
+            `circle(0px at ${cx}px ${cy}px)`,
+            `circle(${radius}px at ${cx}px ${cy}px)`,
+          ],
+        },
+        {
+          duration: THEME_DUR,
+          easing: "ease-in-out",
+          pseudoElement: "::view-transition-new(root)",
+        },
+      );
+    })
+    .catch(() => {
+      /* snapshot gagal — tema sudah diterapkan oleh apply(); abaikan */
+    });
 }
 
 // ---------------------------------------------------------------------------

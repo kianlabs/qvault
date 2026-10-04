@@ -303,3 +303,16 @@ button {
     animation: qv-fade 0.16s ease-out;
   }
 }
+
+/* ===========================================================================
+   View Transitions — transisi tema (paritas web CV)
+   ---------------------------------------------------------------------------
+   Matikan animasi cross-fade bawaan browser; kita kendalikan sendiri lewat
+   `clip-path: circle()` yang mengembang dari tombol toggle (lihat lib/motion).
+   Snapshot lama & baru ditumpuk tanpa blend agar tepi lingkaran bersih.
+   =========================================================================== */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}

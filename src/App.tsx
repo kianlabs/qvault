@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -27,7 +27,7 @@ import SettingsPage from "./features/settings/SettingsPage";
 import { useAuthStore } from "./store/useAuthStore";
 import { useSettingsStore } from "./store/useSettingsStore";
 import { isDarkTheme, useThemeStore } from "./store/useThemeStore";
-import { pageEnter, themeSwap } from "./lib/motion";
+import { pageEnter, swapTheme } from "./lib/motion";
 import { DEFAULT_ACCENT, applyAccent } from "./lib/accents";
 
 /**
@@ -64,8 +64,8 @@ function Shell() {
   const { locked, degraded, refreshStatus } = useAuthStore();
   const { settings, load: loadSettings } = useSettingsStore();
   const pageRef = useRef<HTMLDivElement>(null);
-  const shellRef = useRef<HTMLDivElement>(null);
-  const firstThemeRun = useRef(true);
+  /** Tema yang terakhir diterapkan — untuk tahu kapan harus animasi. */
+  const appliedThemeRef = useRef<string | null>(null);
 
   // Transisi halaman: konten masuk halus setiap rute berubah.
   useEffect(() => {
@@ -94,38 +94,40 @@ function Shell() {
   // Auto-lock aktif hanya saat vault terbuka.
   useAutoLock(!locked && autoLockMin > 0, autoLockMin);
 
-  // Terapkan tema ke <html>: kelas preset + varian `dark` untuk keluarga gelap.
-  useEffect(() => {
+  // Terapkan tema + aksen + skema warna ke <html> sebagai satu mutasi sinkron.
+  // Dipisah jadi fungsi supaya bisa dijalankan di dalam callback View Transition
+  // (browser mengambil snapshot tepat sebelum & sesudah pemanggilan ini).
+  const applyThemeNow = useCallback(() => {
     const root = document.documentElement;
-
-    // Baca warna kanvas tema LAMA SEBELUM kelas ditukar — dipakai sebagai veil
-    // transisi (kalau dibaca setelah swap, veil sama dengan latar baru → tak
-    // terlihat).
-    const fromBg =
-      getComputedStyle(root).getPropertyValue("--bg").trim() || "#121417";
-
     const presets = ["light", "dark", "slate", "nord", "sepia"];
     presets.forEach((p) => root.classList.remove(p));
     root.classList.add(theme);
     if (theme === "slate" || theme === "nord") root.classList.add("dark");
+    // Sinkronkan skema warna engine (canvas/scrollbar) dengan tema aktif.
+    root.style.colorScheme = isDarkTheme(theme) ? "dark" : "light";
+    applyAccent(root, accent, isDarkTheme(theme));
+  }, [theme, accent]);
 
-    // Efek transisi "slideshow" saat berganti tema — lewati render pertama
-    // (agar tidak berkedip saat aplikasi baru dibuka). Veil slide + konten
-    // "mendarat" halus.
-    if (firstThemeRun.current) {
-      firstThemeRun.current = false;
+  // Transisi tema: saat tema/aksen berganti, ungkap tema baru dengan reveal
+  // lingkaran dari tombol toggle (View Transitions API) — snapshot-based,
+  // sehingga mulus tanpa repaint DOM. Render pertama dilewati (tanpa animasi).
+  useEffect(() => {
+    const key = `${theme}|${accent}`;
+    if (appliedThemeRef.current === key) return;
+    const first = appliedThemeRef.current === null;
+    appliedThemeRef.current = key;
+    if (first) {
+      applyThemeNow();
       return;
     }
-    themeSwap(fromBg, shellRef.current);
-  }, [theme]);
+    swapTheme(applyThemeNow, document.querySelector("[data-theme-toggle]"));
+  }, [theme, accent, applyThemeNow]);
 
-  // Font size + accent. Aksen diresolusi (nama preset / hex) lalu diterapkan
-  // sebagai CSS var supaya seluruh primitif UI langsung ikut berubah warna.
+  // Ukuran font diterapkan langsung (tanpa transisi) — menskalakan snapshot
+  // akan membuat teks tampak buram.
   useEffect(() => {
-    const root = document.documentElement;
-    root.style.fontSize = `${fontSize}px`;
-    applyAccent(root, accent, isDarkTheme(theme));
-  }, [fontSize, accent, theme]);
+    document.documentElement.style.fontSize = `${fontSize}px`;
+  }, [fontSize]);
 
   if (location.pathname === "/unlock") {
     return <UnlockScreen />;
@@ -135,7 +137,7 @@ function Shell() {
   }
 
   return (
-    <div ref={shellRef} className="flex h-full w-full overflow-hidden bg-bg text-ink">
+    <div className="flex h-full w-full overflow-hidden bg-bg text-ink">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />
