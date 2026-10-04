@@ -16,12 +16,12 @@ export interface AccentDef {
 }
 
 export const ACCENTS: AccentDef[] = [
-  { id: "sage", label: "Sage", light: "#4f8a6b", dark: "#86c9a4" },
-  { id: "clay", label: "Clay", light: "#b5624c", dark: "#e0a08c" },
-  { id: "slate", label: "Slate", light: "#4e7387", dark: "#8fb6cb" },
-  { id: "moss", label: "Moss", light: "#4e8a5f", dark: "#85c293" },
-  { id: "stone", label: "Stone", light: "#8a7e68", dark: "#c7bba3" },
-  { id: "dusk", label: "Dusk", light: "#8a6390", dark: "#c09cc6" },
+  { id: "sage", label: "Sage", light: "#43755b", dark: "#86c9a4" },
+  { id: "clay", label: "Clay", light: "#9a5341", dark: "#e0a08c" },
+  { id: "slate", label: "Slate", light: "#486a7c", dark: "#8fb6cb" },
+  { id: "moss", label: "Moss", light: "#427551", dark: "#85c293" },
+  { id: "stone", label: "Stone", light: "#6e6553", dark: "#c7bba3" },
+  { id: "dusk", label: "Dusk", light: "#7f5b84", dark: "#c09cc6" },
 ];
 
 /** Aksen bawaan = Slate (persis KeepR). */
@@ -64,6 +64,78 @@ export function rgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+/** Rasio kontras WCAG antara dua hex (1..21). */
+function contrastRatio(a: string, b: string): number {
+  const la = luminance(a);
+  const lb = luminance(b);
+  const hi = Math.max(la, lb);
+  const lo = Math.min(la, lb);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** hex → [h(0..360), s(0..1), l(0..1)]. */
+function hexToHsl(hex: string): [number, number, number] {
+  const [r0, g0, b0] = hexToRgb(hex).map((v) => v / 255);
+  const max = Math.max(r0, g0, b0);
+  const min = Math.min(r0, g0, b0);
+  const l = (max + min) / 2;
+  let h = 0;
+  let s = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r0: h = (g0 - b0) / d + (g0 < b0 ? 6 : 0); break;
+      case g0: h = (b0 - r0) / d + 2; break;
+      default: h = (r0 - g0) / d + 4;
+    }
+    h *= 60;
+  }
+  return [h, s, l];
+}
+
+/** [h(0..360), s(0..1), l(0..1)] → hex. */
+function hslToHex(h: number, s: number, l: number): string {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  const to = (v: number) =>
+    Math.round((v + m) * 255)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${to(r)}${to(g)}${to(b)}`;
+}
+
+/**
+ * Pastikan warna aksen kustom punya kontras cukup terhadap permukaan tema.
+ *
+ * Warna hex kustom (mis. `#241f31`) tidak punya varian terang/gelap, jadi bisa
+ * tenggelam: di kanvas gelap ia nyaris hitam (ikon aktif `text-accent` jadi tak
+ * terlihat), di kanvas terang ia terlalu pucat. Fungsi ini menggeser lightness
+ * (mempertahankan hue & saturasi) sampai rasio kontras ≥ target (default 4.5),
+ * tanpa mengubah warna untuk kasus yang sudah aman.
+ */
+export function ensureAccentContrast(hex: string, surfaceHex: string, target = 4.5): string {
+  if (contrastRatio(hex, surfaceHex) >= target) return hex;
+  const surfaceLum = luminance(surfaceHex);
+  const lighten = surfaceLum < 0.5; // kanvas gelap → terangkan aksen
+  let [h, s, l] = hexToHsl(hex);
+  for (let i = 0; i < 100; i++) {
+    l += lighten ? 0.02 : -0.02;
+    if (l <= 0 || l >= 1) break;
+    const cand = hslToHex(h, s, l);
+    if (contrastRatio(cand, surfaceHex) >= target) return cand;
+  }
+  return hslToHex(h, s, lighten ? 0.72 : 0.32);
+}
+
 /** Resolusi nilai aksen tersimpan → hex konkret untuk mode saat ini. */
 export function accentBase(accent: string, isDark: boolean): string {
   const def = ACCENTS.find((a) => a.id === accent);
@@ -83,7 +155,10 @@ export function applyAccent(
   accent: string,
   isDark: boolean,
 ): void {
-  const base = accentBase(accent, isDark);
+  // Permukaan tema saat ini dipakai untuk auto-koreksi kontras aksen kustom.
+  const surface =
+    getComputedStyle(root).getPropertyValue("--surface").trim() || (isDark ? "#181a1f" : "#ffffff");
+  const base = ensureAccentContrast(accentBase(accent, isDark), surface);
   root.style.setProperty("--accent", base);
   root.style.setProperty("--accent-soft", rgba(base, isDark ? 0.18 : 0.12));
   root.style.setProperty("--accent-strong", base);

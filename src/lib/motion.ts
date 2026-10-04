@@ -77,24 +77,24 @@ export function pulse(el: Element | null): void {
 }
 
 /**
- * Transisi halus saat tema terang ⇄ gelap ditukar.
+ * Transisi "slideshow" saat tema terang ⇄ gelap ditukar.
  *
- * Caranya: tutup seluruh viewport dengan warna kanvas tema LAMA (`fromBg`),
- * lalu memudarkannya (fade-out) sehingga tema BARU yang sudah terpasang di
- * belakangnya terungkap mulus — efek cross-fade satu layar penuh. Ini membuat
- * perpindahan terang↔gelap terlihat jelas (bukan sekadar "kedip").
+ * Caranya: sebuah tirai (curtain) penuh-layar berisi warna kanvas tema LAMA
+ * dipasang menutupi viewport, lalu digeser KELUAR ke kiri (translateX -100%)
+ * sehingga tema BARU yang sudah terpasang di belakangnya terungkap seperti
+ * lembaran yang di-slide. Konten ikut bergeser sedikit dari kanan (parallax)
+ * supaya terasa seperti perpindahan slide, bukan sekadar fade.
  *
- * Penting: `fromBg` HARUS dibaca SEBELUM class tema di `<html>` ditukar, kalau
- * tidak warna veil akan sama dengan latar baru dan animasinya tak terlihat.
+ * `fromBg` HARUS dibaca SEBELUM class tema di `<html>` ditukar.
  *
- * Fade opacity tetap dijalankan walau OS meminta reduced-motion (opacity aman;
- * yang dihindari adalah gerak/scale) — hanya efek `scale` konten yang di-gate.
- * Veil `pointer-events: none` sehingga tidak memblokir input.
+ * Gerak (slide) di-gate oleh reduced-motion; bila gerak dimatikan, tirai tetap
+ * dipasang lalu langsung dibuang tanpa animasi (perpindahan tetap instan).
+ * Tirai `pointer-events: none` sehingga tidak memblokir input.
  */
 export function themeSwap(fromBg: string, content: Element | null): void {
   if (typeof document === "undefined") return;
 
-  // Buang veil lama bila pengguna menukar tema beruntun (hindari tumpukan).
+  // Buang tirai lama bila pengguna menukar tema beruntun (hindari tumpukan).
   const prev = document.getElementById("qv-theme-veil");
   if (prev) {
     gsap.killTweensOf(prev);
@@ -105,24 +105,47 @@ export function themeSwap(fromBg: string, content: Element | null): void {
   veil.id = "qv-theme-veil";
   veil.setAttribute("aria-hidden", "true");
   veil.style.cssText =
-    `position:fixed;inset:0;background:${fromBg};pointer-events:none;z-index:9999;`;
+    `position:fixed;inset:0;background:${fromBg};pointer-events:none;` +
+    `z-index:9999;will-change:transform;`;
+
+  // Tepi depan tirai — garis aksen tipis agar "lembaran" yang bergeser terlihat.
+  const edge = document.createElement("div");
+  edge.style.cssText =
+    "position:absolute;top:0;right:0;width:2px;height:100%;" +
+    "background:linear-gradient(180deg,transparent,var(--accent),transparent);" +
+    "opacity:0.5;";
+  veil.appendChild(edge);
   document.body.appendChild(veil);
 
-  // Mulai dari opaque penuh (sinkron, sebelum paint) agar tak ada kedip tema baru.
-  gsap.set(veil, { autoAlpha: 1 });
-  gsap.to(veil, {
-    autoAlpha: 0,
-    duration: 0.45,
-    ease: "power2.inOut",
-    onComplete: () => veil.remove(),
-  });
+  const DUR = 0.6;
+  const EASE = "power3.inOut";
 
-  // Konten "mendarat" lembut — hanya bila gerak diizinkan.
-  if (content && motionOK) {
-    gsap.fromTo(
+  // Reduced-motion: buang tirai seketika, tanpa gerak.
+  // Cek dinamis saat pemanggilan (bukan nilai cache saat module-load) supaya
+  // setelan OS yang berubah di tengah sesi tetap dihormati.
+  if (prefersReducedMotion()) {
+    veil.remove();
+    return;
+  }
+
+  const tl = gsap.timeline({ onComplete: () => veil.remove() });
+
+  // Tirai lama menggeser keluar ke kiri — mengungkap tema baru di belakangnya.
+  tl.to(veil, { xPercent: -100, duration: DUR, ease: EASE }, 0);
+
+  // Konten menyusul dari kanan (parallax) → terasa seperti slide show.
+  if (content) {
+    tl.fromTo(
       content,
-      { scale: 0.988 },
-      { scale: 1, duration: 0.45, ease: "power2.out", clearProps: "transform" },
+      { xPercent: 6, autoAlpha: 0.55 },
+      {
+        xPercent: 0,
+        autoAlpha: 1,
+        duration: DUR,
+        ease: EASE,
+        clearProps: "transform,opacity,visibility",
+      },
+      0,
     );
   }
 }
