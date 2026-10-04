@@ -14,6 +14,10 @@ const LATEST_ASSET = "latest.json";
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    // Cek hidup harus tetap berfungsi walau env belum lengkap.
+    if (url.pathname === "/health") return json({ ok: true });
+
     const { GH_OWNER, GH_REPO, GH_TOKEN } = env;
     if (!GH_OWNER || !GH_REPO || !GH_TOKEN) {
       return json({ error: "Worker belum dikonfigurasi (GH_OWNER/GH_REPO/GH_TOKEN)." }, 500);
@@ -26,8 +30,6 @@ export default {
       "User-Agent": "qvault-updater-worker",
       "X-GitHub-Api-Version": "2022-11-28",
     };
-
-    if (url.pathname === "/health") return json({ ok: true });
 
     if (url.pathname === "/updates/latest.json") {
       const release = await latestRelease(api, ghHeaders);
