@@ -9,7 +9,7 @@ import {
 import CommandPalette from "./components/CommandPalette";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Sidebar from "./components/Sidebar";
-import Topbar from "./components/Topbar";
+import TitleBar from "./components/TitleBar";
 import { ToastProvider } from "./components/Toast";
 import UnlockScreen from "./features/auth/UnlockScreen";
 import DashboardPage from "./features/dashboard/DashboardPage";
@@ -137,40 +137,42 @@ function Shell() {
   }
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-bg text-ink">
-      <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar />
-        {degraded && (
-          <div className="border-b border-danger/30 bg-danger-soft px-8 py-2 text-xs font-medium text-danger">
-            {degraded}
-          </div>
-        )}
-        <main className="min-h-0 flex-1 overflow-y-auto">
-          <div
-            key={location.pathname}
-            ref={pageRef}
-            className="mx-auto w-full max-w-[1400px] px-8 py-7"
-          >
-            <ErrorBoundary>
-              <Routes>
-                <Route path="/" element={<DashboardPage />} />
-                <Route path="/vault" element={<VaultPage />} />
-                <Route path="/notes" element={<NotesPage />} />
-                <Route path="/tasks" element={<TasksPage />} />
-                <Route path="/calendar" element={<CalendarPage />} />
-                <Route path="/income" element={<IncomePage />} />
-                <Route path="/folders" element={<FoldersPage />} />
-                <Route path="/favorites" element={<FavoritesPage />} />
-                <Route path="/generator" element={<GeneratorPage />} />
-                <Route path="/health" element={<HealthPage />} />
-                <Route path="/activity" element={<ActivityPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </ErrorBoundary>
-          </div>
-        </main>
+    <div className="flex h-full w-full flex-col overflow-hidden bg-bg text-ink">
+      <TitleBar />
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <Sidebar />
+        <div className="flex min-w-0 flex-1 flex-col">
+          {degraded && (
+            <div className="border-b border-danger/30 bg-danger-soft px-8 py-2 text-xs font-medium text-danger">
+              {degraded}
+            </div>
+          )}
+          <main className="min-h-0 flex-1 overflow-y-auto">
+            <div
+              key={location.pathname}
+              ref={pageRef}
+              className="mx-auto w-full max-w-[1400px] px-8 py-7"
+            >
+              <ErrorBoundary>
+                <Routes>
+                  <Route path="/" element={<DashboardPage />} />
+                  <Route path="/vault" element={<VaultPage />} />
+                  <Route path="/notes" element={<NotesPage />} />
+                  <Route path="/tasks" element={<TasksPage />} />
+                  <Route path="/calendar" element={<CalendarPage />} />
+                  <Route path="/income" element={<IncomePage />} />
+                  <Route path="/folders" element={<FoldersPage />} />
+                  <Route path="/favorites" element={<FavoritesPage />} />
+                  <Route path="/generator" element={<GeneratorPage />} />
+                  <Route path="/health" element={<HealthPage />} />
+                  <Route path="/activity" element={<ActivityPage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </ErrorBoundary>
+            </div>
+          </main>
+        </div>
       </div>
       <CommandPalette />
     </div>

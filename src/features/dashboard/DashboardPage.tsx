@@ -1,24 +1,19 @@
-// QVAULT — Dashboard (route "/"). Read-only overview built from Wave-1 stores:
-// useTasksStore (dashboard_stats), useIncomeStore (income_summary), useActivityStore.
-// Wave 3 (Agent C): World clock, Vault protection, Recent credentials.
-// UI overhaul: "Calm Precision" design system (presentation only — no logic change).
-import { useEffect, useMemo, useRef, useState } from "react";
+// QVAULT — Dashboard (route "/"). Overview shell mengikuti referensi KeepR:
+// sapaan + tiga kartu ringkas + banner peringatan + kartu Income Activity
+// (area chart) + rail widget kanan (World Clocks, Upcoming Tasks, Vault
+// Protection). Presentasi saja — seluruh data tetap dari store Wave-1/Wave-3.
+import { useEffect, useMemo, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Activity as ActivityIcon,
-  AlertTriangle,
   ArrowRight,
   CalendarClock,
   Check,
   CheckCircle2,
   ChevronRight,
-  FolderTree,
   KeyRound,
   Lock,
-  Maximize2,
-  Minimize2,
   NotebookPen,
-  Settings as SettingsIcon,
   ShieldCheck,
   TrendingUp,
   Unlock,
@@ -28,6 +23,7 @@ import { useIncomeStore } from "../../store/useIncomeStore";
 import { useActivityStore } from "../../store/useActivityStore";
 import { useVaultStore } from "../../store/useVaultStore";
 import { useAuthStore } from "../../store/useAuthStore";
+import { useSettingsStore } from "../../store/useSettingsStore";
 import {
   cn,
   formatCurrency,
@@ -35,29 +31,11 @@ import {
   formatRelative,
   initials,
 } from "../../lib/utils";
-import {
-  Badge,
-  Button,
-  Card,
-  CardHeader,
-  IconButton,
-  PageHeader,
-  StatCard,
-  type Tone,
-} from "../../components/ui";
+import { AreaChart, Badge, Card } from "../../components/ui";
 import EmptyState from "../../components/EmptyState";
 import WorldClock from "../../components/WorldClock";
-import { exitFullscreen, isFullscreen, toggleFullscreen } from "../../lib/fullscreen";
 import { staggerIn, useGsap } from "../../lib/motion";
 import type { LucideIcon } from "lucide-react";
-
-interface Tile {
-  label: string;
-  value: string;
-  icon: LucideIcon;
-  tone: Tone;
-  to: string;
-}
 
 /** Checklist keamanan vault (statis — sifat arsitektur, bukan state). */
 const PROTECTION: { label: string }[] = [
@@ -73,21 +51,25 @@ const ACTIVITY_ICONS: Record<string, LucideIcon> = {
   notes: NotebookPen,
   tasks: CalendarClock,
   income: TrendingUp,
-  folders: FolderTree,
-  settings: SettingsIcon,
 };
 
-/** Tone badge untuk status tugas. */
-function taskTone(status: string): Tone {
-  if (status === "done") return "success";
-  if (status === "in_progress") return "info";
-  return "neutral";
+/** `2026-08` → `Aug`. */
+function shortMonth(month: string): string {
+  const d = new Date(`${month}-01T00:00:00`);
+  if (Number.isNaN(d.getTime())) return month;
+  return d.toLocaleDateString("en-GB", { month: "short" });
+}
+
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
 }
 
 export default function DashboardPage() {
   const navigate = useNavigate();
   const stats = useTasksStore((s) => s.stats);
-  const statsLoading = useTasksStore((s) => s.statsLoading);
   const loadStats = useTasksStore((s) => s.loadStats);
   const summary = useIncomeStore((s) => s.summary);
   const loadSummary = useIncomeStore((s) => s.loadSummary);
@@ -97,93 +79,26 @@ export default function DashboardPage() {
   const loadVault = useVaultStore((s) => s.load);
   const initialized = useAuthStore((s) => s.initialized);
   const locked = useAuthStore((s) => s.locked);
+  const displayName = useSettingsStore((s) => s.settings?.displayName ?? "");
 
-  // Full screen mode (WAVE5 §F.2): state lokal + sinkron saat mount.
-  const [fs, setFs] = useState(false);
-  useEffect(() => {
-    void isFullscreen().then(setFs);
-  }, []);
-
-  // Entrance motion (presentation only). Each ref marks a container; its
-  // children cascade in. No logic/state is touched.
-  const tilesRef = useRef<HTMLElement>(null);
   const credentialsRef = useRef<HTMLUListElement>(null);
-  const upcomingRef = useRef<HTMLUListElement>(null);
-  const activityRef = useRef<HTMLUListElement>(null);
-
-  useGsap(() => {
-    staggerIn(tilesRef.current, ":scope > *", { y: 10, stagger: 0.04 });
-  }, []);
-
-  useGsap(() => {
-    staggerIn(activityRef.current, ":scope > *", { y: 8, stagger: 0.03 });
-  }, [activity]);
-
-  // Escape keluar dari fullscreen — cuma dipasang saat fullscreen aktif.
-  useEffect(() => {
-    if (!fs) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") void exitFullscreen().then(() => setFs(false));
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [fs]);
 
   useEffect(() => {
     void loadStats();
     void loadSummary();
-    void loadActivity(8);
+    void loadActivity(6);
     void loadVault();
   }, [loadStats, loadSummary, loadActivity, loadVault]);
 
-  const tiles: Tile[] = [
-    {
-      label: "Vault items",
-      value: String(stats?.totalItems ?? 0),
-      icon: KeyRound,
-      tone: "accent",
-      to: "/vault",
-    },
-    {
-      label: "Notes",
-      value: String(stats?.totalNotes ?? 0),
-      icon: NotebookPen,
-      tone: "info",
-      to: "/notes",
-    },
-    {
-      label: "Overdue",
-      value: String(stats?.tasksOverdue ?? 0),
-      icon: AlertTriangle,
-      tone: "danger",
-      to: "/tasks",
-    },
-    {
-      label: "Due today",
-      value: String(stats?.tasksToday ?? 0),
-      icon: CalendarClock,
-      tone: "warn",
-      to: "/tasks",
-    },
-    {
-      label: "Tasks done",
-      value: String(stats?.tasksDone ?? 0),
-      icon: CheckCircle2,
-      tone: "success",
-      to: "/tasks",
-    },
-    {
-      label: "Income this month",
-      value: formatCurrency(stats?.incomeThisMonth ?? summary?.thisMonth ?? 0),
-      icon: TrendingUp,
-      tone: "success",
-      to: "/income",
-    },
-  ];
+  const chartData = useMemo(
+    () =>
+      (summary?.byMonth ?? []).map((m) => ({
+        label: shortMonth(m.month),
+        value: m.total,
+      })),
+    [summary],
+  );
 
-  const upcoming = stats?.upcomingTasks ?? [];
-
-  // 5 credential terbaru (urut createdAt desc).
   const recentCredentials = useMemo(
     () =>
       [...vaultItems]
@@ -192,236 +107,342 @@ export default function DashboardPage() {
     [vaultItems],
   );
 
-  // Cascade the recent-credentials and upcoming-task rows when they change.
+  const upcoming = stats?.upcomingTasks ?? [];
+  const overdue = stats?.tasksOverdue ?? 0;
+
   useGsap(() => {
     staggerIn(credentialsRef.current, ":scope > *", { y: 8, stagger: 0.035 });
   }, [recentCredentials]);
 
-  useGsap(() => {
-    staggerIn(upcomingRef.current, ":scope > *", { y: 8, stagger: 0.035 });
-  }, [stats?.upcomingTasks]);
-
-  const statusLabel = !initialized ? "Not set up" : locked ? "Locked" : "Unlocked";
-  const statusTone: Tone = !initialized ? "neutral" : locked ? "warn" : "success";
+  const statusLabel = !initialized ? "Not set up" : locked ? "Locked" : "Ready";
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Dashboard"
-        subtitle="Everything at a glance — vault, notes, tasks and income."
-        actions={
-          <>
-            <IconButton
-              icon={fs ? Minimize2 : Maximize2}
-              label={fs ? "Exit full screen" : "Full screen"}
-              onClick={async () => setFs(await toggleFullscreen())}
-            />
-            <Button
-              variant="primary"
-              icon={ArrowRight}
-              onClick={() => navigate("/generator")}
-            >
-              Generate password
-            </Button>
-          </>
-        }
-      />
+      {/* Sapaan */}
+      <header>
+        <h1 className="text-2xl font-semibold tracking-tight text-ink">
+          {greeting()}, {displayName || "there"}.
+        </h1>
+        <p className="mt-1 text-sm text-muted">
+          Here's everything across your Life OS.
+        </p>
+      </header>
 
-      <section
-        ref={tilesRef}
-        className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6"
-      >
-        {tiles.map(({ label, value, icon, tone, to }) => (
-          <StatCard
-            key={label}
-            label={label}
-            value={statsLoading && !stats ? "…" : value}
-            icon={icon}
-            tone={tone}
-            onClick={() => navigate(to)}
-          />
-        ))}
+      {/* Kartu ringkas */}
+      <section className="grid grid-cols-2 gap-4 md:grid-cols-3">
+        <SummaryCard
+          icon={KeyRound}
+          label="Credentials"
+          value={stats?.totalItems ?? vaultItems.length}
+          tone="accent"
+          onClick={() => navigate("/vault")}
+        />
+        <SummaryCard
+          icon={NotebookPen}
+          label="Notes"
+          value={stats?.totalNotes ?? 0}
+          tone="info"
+          onClick={() => navigate("/notes")}
+        />
+        <SummaryCard
+          icon={CheckCircle2}
+          label="Tasks"
+          value={stats?.tasksToday ?? 0}
+          tone="success"
+          onClick={() => navigate("/tasks")}
+        />
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card padding="lg">
-          <CardHeader
-            icon={ShieldCheck}
-            title="Vault protection"
-            action={<Badge tone={statusTone}>{statusLabel}</Badge>}
-          />
-          <div className="flex items-center gap-3">
-            <div
-              className={cn(
-                "grid h-11 w-11 place-items-center rounded-xl",
-                locked ? "bg-warn-soft text-warn" : "bg-accent-soft text-accent",
-              )}
-            >
-              {locked ? <Lock className="h-5 w-5" /> : <Unlock className="h-5 w-5" />}
+      {/* Banner peringatan */}
+      {overdue > 0 && (
+        <button
+          type="button"
+          onClick={() => navigate("/tasks")}
+          className="flex w-full items-center gap-2 rounded-xl border border-warn/30 bg-warn-soft px-4 py-2.5 text-left text-xs text-warn transition-colors hover:border-warn/50"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-warn" />
+          <span className="font-medium">
+            {overdue} task{overdue === 1 ? "" : "s"} overdue
+          </span>
+          <span className="ml-auto inline-flex items-center gap-1 font-medium">
+            View tasks <ArrowRight className="h-3.5 w-3.5" />
+          </span>
+        </button>
+      )}
+
+      {/* Dua kolom: konten utama + rail widget */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-6">
+          {/* Income Activity */}
+          <Card padding="lg">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
+                <TrendingUp className="h-4 w-4 text-muted" />
+                Income Activity
+              </h2>
+              <Badge tone="success">
+                <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                Active
+              </Badge>
             </div>
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-ink">
-                {locked ? "Vault is locked" : "Vault is unlocked"}
+
+            <div className="mb-4 flex gap-8">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.14em] text-faint">
+                  This month
+                </p>
+                <p className="mt-0.5 text-lg font-semibold tabular-nums text-ink">
+                  {formatCurrency(summary?.thisMonth ?? 0)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.14em] text-faint">
+                  All-time
+                </p>
+                <p className="mt-0.5 text-lg font-semibold tabular-nums text-success">
+                  {formatCurrency(summary?.allTime ?? 0)}
+                </p>
+              </div>
+            </div>
+
+            {chartData.length > 0 ? (
+              <AreaChart data={chartData} height={170} />
+            ) : (
+              <p className="py-10 text-center text-xs text-muted">
+                No income recorded yet.
               </p>
-              <p className="text-xs text-muted">Encrypted at rest, decrypted in memory only.</p>
+            )}
+          </Card>
+
+          {/* Recent credentials */}
+          <Card padding="none">
+            <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
+                <KeyRound className="h-4 w-4 text-muted" />
+                Recent credentials
+              </h2>
+              <Link
+                to="/vault"
+                className="text-xs text-muted transition-colors hover:text-ink"
+              >
+                View all
+              </Link>
             </div>
-          </div>
+            {recentCredentials.length === 0 ? (
+              <div className="p-4">
+                <EmptyState
+                  icon={KeyRound}
+                  title="No credentials yet"
+                  hint="Items you save will show up here."
+                />
+              </div>
+            ) : (
+              <ul ref={credentialsRef}>
+                {recentCredentials.map((item) => (
+                  <li key={item.id} className="border-b border-line last:border-0">
+                    <button
+                      type="button"
+                      onClick={() => navigate("/vault")}
+                      className="group flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-raised"
+                    >
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-accent-strong">
+                        {initials(item.title)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm text-ink">
+                          {item.title}
+                        </span>
+                        <span className="block truncate text-xs text-muted">
+                          {item.username || "—"}
+                        </span>
+                      </span>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-faint opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
 
-          <ul className="mt-4 space-y-1.5">
-            {PROTECTION.map((p) => (
-              <li key={p.label} className="flex items-center gap-2 text-xs text-muted">
-                <Check className="h-3.5 w-3.5 text-success" />
-                {p.label}
-              </li>
-            ))}
-          </ul>
-        </Card>
+        {/* Rail widget */}
+        <aside className="space-y-6">
+          <WorldClock />
 
-        <WorldClock />
+          {/* Upcoming tasks */}
+          <Card padding="none">
+            <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
+                <CalendarClock className="h-4 w-4 text-muted" />
+                Upcoming tasks
+              </h2>
+              <Link
+                to="/tasks"
+                className="text-xs text-muted transition-colors hover:text-ink"
+              >
+                View all
+              </Link>
+            </div>
+            {upcoming.length === 0 ? (
+              <p className="px-4 py-6 text-center text-xs text-muted">
+                No upcoming tasks.
+              </p>
+            ) : (
+              <ul>
+                {upcoming.slice(0, 4).map((task) => (
+                  <li
+                    key={task.id}
+                    className="flex items-center gap-2.5 border-b border-line px-4 py-2.5 last:border-0"
+                  >
+                    <span
+                      className={cn(
+                        "h-1.5 w-1.5 shrink-0 rounded-full",
+                        task.status === "done" ? "bg-success" : "bg-warn",
+                      )}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs text-ink">{task.title}</p>
+                      <p className="text-[11px] text-muted">
+                        {task.dueDate ? formatDate(task.dueDate) : "No due date"}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          {/* Vault protection */}
+          <Card padding="lg">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
+                <ShieldCheck className="h-4 w-4 text-muted" />
+                Vault protection
+              </h2>
+              <Badge tone={locked ? "warn" : "success"}>{statusLabel}</Badge>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div
+                className={cn(
+                  "grid h-10 w-10 place-items-center rounded-xl",
+                  locked ? "bg-warn-soft text-warn" : "bg-accent-soft text-accent",
+                )}
+              >
+                {locked ? <Lock className="h-5 w-5" /> : <Unlock className="h-5 w-5" />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-ink">
+                  {locked ? "Vault is locked" : "Vault is unlocked"}
+                </p>
+                <p className="text-xs text-muted">
+                  Encrypted at rest, decrypted in memory only.
+                </p>
+              </div>
+            </div>
+
+            <ul className="mt-4 space-y-1.5">
+              {PROTECTION.map((p) => (
+                <li key={p.label} className="flex items-center gap-2 text-xs text-muted">
+                  <Check className="h-3.5 w-3.5 text-success" />
+                  {p.label}
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </aside>
       </div>
 
+      {/* Recent activity */}
       <Card padding="none">
         <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
-            <KeyRound className="h-4 w-4 text-muted" />
-            Recent credentials
+            <ActivityIcon className="h-4 w-4 text-muted" />
+            Recent activity
           </h2>
           <Link
-            to="/vault"
+            to="/activity"
             className="text-xs text-muted transition-colors hover:text-ink"
           >
             View all
           </Link>
         </div>
-        {recentCredentials.length === 0 ? (
+        {activity.length === 0 ? (
           <div className="p-4">
             <EmptyState
-              icon={KeyRound}
-              title="No credentials yet"
-              hint="Items you save will show up here."
+              icon={ActivityIcon}
+              title="Nothing yet"
+              hint="Your recent changes will show up here."
             />
           </div>
         ) : (
-          <ul ref={credentialsRef}>
-            {recentCredentials.map((item) => (
-              <li key={item.id} className="border-b border-line last:border-0">
-                <button
-                  type="button"
-                  onClick={() => navigate("/vault")}
-                  className="group flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-raised"
+          <ul>
+            {activity.slice(0, 6).map((entry) => {
+              const Icon = ACTIVITY_ICONS[entry.module] ?? ActivityIcon;
+              return (
+                <li
+                  key={entry.id}
+                  className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5 last:border-0"
                 >
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent-soft text-xs font-semibold text-accent-strong">
-                    {initials(item.title)}
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <Icon className="h-4 w-4 shrink-0 text-muted" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-ink">
+                        {entry.itemName || entry.module}
+                      </p>
+                      <p className="truncate text-xs text-muted">
+                        {entry.module} · {entry.action}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-[11px] text-muted">
+                    {formatRelative(entry.createdAt)}
                   </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm text-ink">{item.title}</span>
-                    <span className="block truncate text-xs text-muted">
-                      {item.username || "—"}
-                    </span>
-                  </span>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-faint opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
-                </button>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
       </Card>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card padding="none">
-          <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
-              <CalendarClock className="h-4 w-4 text-muted" />
-              Upcoming tasks
-            </h2>
-            <Link
-              to="/tasks"
-              className="text-xs text-muted transition-colors hover:text-ink"
-            >
-              View all
-            </Link>
-          </div>
-          {upcoming.length === 0 ? (
-            <div className="p-4">
-              <EmptyState
-                icon={CalendarClock}
-                title="No upcoming tasks"
-                hint="Tasks with a due date will appear here."
-              />
-            </div>
-          ) : (
-            <ul ref={upcomingRef}>
-              {upcoming.map((task) => (
-                <li
-                  key={task.id}
-                  className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5 last:border-0"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm text-ink">{task.title}</p>
-                    <p className="text-xs text-muted">
-                      {task.dueDate ? formatDate(task.dueDate) : "No due date"}
-                    </p>
-                  </div>
-                  <Badge tone={taskTone(task.status)}>
-                    {task.status.replace("_", " ")}
-                  </Badge>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-        <Card padding="none">
-          <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
-              <ActivityIcon className="h-4 w-4 text-muted" />
-              Recent activity
-            </h2>
-            <Link
-              to="/activity"
-              className="text-xs text-muted transition-colors hover:text-ink"
-            >
-              View all
-            </Link>
-          </div>
-          {activity.length === 0 ? (
-            <div className="p-4">
-              <EmptyState
-                icon={ActivityIcon}
-                title="Nothing yet"
-                hint="Your recent changes will show up here."
-              />
-            </div>
-          ) : (
-            <ul ref={activityRef}>
-              {activity.map((entry) => {
-                const Icon = ACTIVITY_ICONS[entry.module] ?? ActivityIcon;
-                return (
-                  <li
-                    key={entry.id}
-                    className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5 last:border-0"
-                  >
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <Icon className="h-4 w-4 shrink-0 text-muted" />
-                      <div className="min-w-0">
-                        <p className="truncate text-sm text-ink">
-                          {entry.itemName || entry.module}
-                        </p>
-                        <p className="truncate text-xs text-muted">
-                          {entry.module} · {entry.action}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="shrink-0 text-[11px] text-muted">
-                      {formatRelative(entry.createdAt)}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Card>
-      </div>
     </div>
+  );
+}
+
+/** Kartu ringkas (ikon + label + angka) untuk baris atas dashboard. */
+function SummaryCard({
+  icon: Icon,
+  label,
+  value,
+  tone,
+  onClick,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: number;
+  tone: "accent" | "info" | "success";
+  onClick: () => void;
+}) {
+  const toneCls = {
+    accent: "bg-accent-soft text-accent",
+    info: "bg-info-soft text-info",
+    success: "bg-success-soft text-success",
+  }[tone];
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-3 rounded-2xl border border-line bg-elevated p-4 text-left transition-colors duration-150 hover:border-line-strong hover:bg-raised"
+    >
+      <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-xl", toneCls)}>
+        <Icon className="h-5 w-5" />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-xs font-medium text-muted">{label}</span>
+        <span className="block text-2xl font-semibold tracking-tight tabular-nums text-ink">
+          {value}
+        </span>
+      </span>
+    </button>
   );
 }

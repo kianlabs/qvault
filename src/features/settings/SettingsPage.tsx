@@ -92,7 +92,7 @@ export default function SettingsPage() {
 
   const [displayName, setDisplayName] = useState("");
   const [avatar, setAvatar] = useState("");
-  // Tema dikelola store global agar tombol toggle di Topbar & grid di sini
+  // Tema dikelola store global agar tombol toggle di Sidebar & grid di sini
   // selalu sinkron. Persistensi ditangani store (optimistic + backend).
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);

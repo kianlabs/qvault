@@ -16,7 +16,7 @@ import {
 import { buildIndex, searchIndex, type SearchHit } from "../lib/search";
 import { motionOK, popIn, staggerIn } from "../lib/motion";
 import { cn } from "../lib/utils";
-import { OPEN_PALETTE_EVENT } from "./Topbar";
+import { OPEN_PALETTE_EVENT } from "../lib/events";
 
 const MODULE_ICON: Record<SearchHit["module"], LucideIcon> = {
   vault: KeyRound,
@@ -62,7 +62,7 @@ export default function CommandPalette() {
       if (e.key === "Escape") setOpen(false);
     };
     window.addEventListener("keydown", onKey);
-    // Topbar memicu event ini; ini yang membuat search bar benar-benar bekerja.
+    // TitleBar memicu event ini; ini yang membuat search bar benar-benar bekerja.
     const onOpen = () => setOpen(true);
     window.addEventListener(OPEN_PALETTE_EVENT, onOpen);
     return () => {

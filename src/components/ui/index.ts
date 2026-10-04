@@ -6,6 +6,7 @@ export { default as Card, CardHeader } from "./Card";
 export { default as Input, SearchInput, Field } from "./Input";
 export { default as PageHeader } from "./PageHeader";
 export { default as StatCard } from "./StatCard";
+export { default as AreaChart } from "./AreaChart";
 export { default as Toggle } from "./Toggle";
 export { default as Tabs, type TabItem } from "./Tabs";
 export { default as Menu, type MenuItem } from "./Menu";
