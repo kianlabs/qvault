@@ -38,7 +38,20 @@ export default {
       if (!asset) return json({ error: "Asset latest.json tidak ada di rilis." }, 404);
       const body = await fetchAsset(asset, ghHeaders);
       if (!body) return json({ error: "Gagal mengambil latest.json." }, 502);
-      return new Response(body, {
+
+      // Tulis-ulang URL unduhan agar menunjuk ke origin worker INI sendiri.
+      // Manifest di rilis bisa saja memuat host lama (mis. subdomain berubah),
+      // sehingga klien tetap selalu mengunduh lewat worker yang melayaninya.
+      const manifest = await new Response(body).json();
+      if (manifest && manifest.platforms) {
+        for (const platform of Object.values(manifest.platforms)) {
+          if (platform && typeof platform.url === "string") {
+            const name = platform.url.split("/").pop();
+            platform.url = `${url.origin}/updates/download/${name}`;
+          }
+        }
+      }
+      return new Response(JSON.stringify(manifest), {
         headers: {
           "content-type": "application/json",
           // Cache singkat supaya rilis baru cepat terlihat.

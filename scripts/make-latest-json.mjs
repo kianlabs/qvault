@@ -8,7 +8,7 @@ import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 const WORKER_BASE =
-  process.env.WORKER_BASE || "https://qvault-updates.kianlabs.workers.dev";
+  process.env.WORKER_BASE || "https://qvault-updates.ridzkyan0504.workers.dev";
 
 const conf = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8"));
 const version = conf.version;

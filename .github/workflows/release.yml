@@ -78,7 +78,7 @@ jobs:
 
       - name: Generate latest.json
         env:
-          WORKER_BASE: https://qvault-updates.kianlabs.workers.dev
+          WORKER_BASE: https://qvault-updates.ridzkyan0504.workers.dev
           RELEASE_NOTES: ${{ github.event.head_commit.message }}
         run: node scripts/make-latest-json.mjs
 

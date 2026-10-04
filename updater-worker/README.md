@@ -25,7 +25,7 @@ bunx wrangler secret put GH_TOKEN         # tempel GitHub token (repo:read cukup
 bunx wrangler deploy
 ```
 
-Setelah deploy, URL worker (mis. `https://qvault-updates.kianlabs.workers.dev`)
+Setelah deploy, URL worker (mis. `https://qvault-updates.ridzkyan0504.workers.dev`)
 harus sama dengan `endpoints` di `src-tauri/tauri.conf.json` dan `WORKER_BASE`
 di `.github/workflows/release.yml`.
 
