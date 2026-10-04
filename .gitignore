@@ -17,6 +17,9 @@ src-tauri/target
 target/
 src-tauri/gen/schemas
 
+# Updater — dihasilkan di CI, jangan di-commit
+latest.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -1,10 +1,50 @@
 // QVAULT — About card (WAVE3-CONTRACT.md §B). Kartu identitas app yang
-// ditampilkan di Settings → About. Murni presentasional, tanpa side-effect.
-import { Sparkles } from "lucide-react";
-
-const VERSION = "0.1.0";
+// ditampilkan di Settings → About. Menampilkan versi nyata dari bundle dan
+// menyediakan tombol cek update manual.
+import { useEffect, useState } from "react";
+import { RefreshCw, Sparkles } from "lucide-react";
+import { getVersion } from "@tauri-apps/api/app";
+import Button from "./ui/Button";
+import { useToast } from "./Toast";
+import { useUpdaterStore } from "../store/useUpdaterStore";
+import { checkForUpdate, isTauri } from "../lib/updater";
 
 export default function AboutCard() {
+  const toast = useToast();
+  const showUpdate = useUpdaterStore((s) => s.show);
+  const [version, setVersion] = useState<string>("0.1.0");
+  const [checking, setChecking] = useState(false);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let cancelled = false;
+    getVersion()
+      .then((v) => {
+        if (!cancelled && v) setVersion(v);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleCheck() {
+    setChecking(true);
+    try {
+      const info = await checkForUpdate();
+      if (info) {
+        showUpdate(info);
+        toast.info(`Update ${info.version} tersedia.`);
+      } else {
+        toast.success("Kamu sudah memakai versi terbaru.");
+      }
+    } catch (err) {
+      toast.error(`Gagal memeriksa update: ${String(err)}`);
+    } finally {
+      setChecking(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
@@ -13,7 +53,7 @@ export default function AboutCard() {
         </div>
         <div>
           <p className="text-base font-semibold text-ink">QVAULT</p>
-          <p className="text-xs text-muted">v{VERSION}</p>
+          <p className="text-xs text-muted">v{version}</p>
         </div>
       </div>
 
@@ -30,6 +70,11 @@ export default function AboutCard() {
         <p>100% offline · tanpa cloud · tanpa telemetri</p>
         <p className="font-mono">Argon2id · AES-256-GCM · SQLite</p>
       </div>
+
+      <Button size="sm" onClick={handleCheck} disabled={checking}>
+        <RefreshCw className={checking ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} />
+        {checking ? "Memeriksa…" : "Cek update"}
+      </Button>
     </div>
   );
 }

@@ -1,0 +1,77 @@
+# QVAULT — Rilis otomatis (AppImage + updater).
+#
+# Dipicu saat push tag (mis. v0.2.0). Membangun AppImage bertanda tangan,
+# membuat latest.json yang menunjuk ke worker proxy, lalu mempublikasikan
+# GitHub Release. Worker (updater-worker/) memegang token dan menyajikan
+# aset ini ke app yang terpasang.
+#
+# Rahasia yang dibutuhkan (Settings → Secrets → Actions):
+#   TAURI_SIGNING_PRIVATE_KEY          isi file ~/.tauri/qvault.key
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD password kunci (kosong bila tanpa password)
+#
+# CATATAN: jangan menyentuh ci.yml — workflow ini terpisah.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libfuse2
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build AppImage (signed)
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: bunx tauri build --bundles appimage
+
+      - name: Generate latest.json
+        env:
+          WORKER_BASE: https://qvault-updates.kianlabs.workers.dev
+          RELEASE_NOTES: ${{ github.event.head_commit.message }}
+        run: node scripts/make-latest-json.mjs
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "QVAULT ${GITHUB_REF_NAME}" \
+            --notes "Rilis QVAULT ${GITHUB_REF_NAME}." \
+            src-tauri/target/release/bundle/appimage/*.AppImage \
+            src-tauri/target/release/bundle/appimage/*.AppImage.sig \
+            latest.json

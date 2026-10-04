@@ -11,6 +11,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import Sidebar from "./components/Sidebar";
 import TitleBar from "./components/TitleBar";
 import { ToastProvider } from "./components/Toast";
+import UpdateDialog from "./components/UpdateDialog";
 import UnlockScreen from "./features/auth/UnlockScreen";
 import DashboardPage from "./features/dashboard/DashboardPage";
 import VaultPage from "./features/vault/VaultPage";
@@ -197,6 +198,7 @@ export default function App() {
       <BrowserRouter>
         <Shell />
       </BrowserRouter>
+      <UpdateDialog />
     </ToastProvider>
   );
 }
