@@ -54,6 +54,7 @@ No cloud, no telemetry — your data never leaves the device.
 | Backend          | Rust (stable), `rusqlite`, `argon2`, `aes-gcm`, `hmac`  |
 | Frontend         | React 19, TypeScript, React Router, Zustand             |
 | Styling          | Tailwind CSS 4                                          |
+| Motion           | Web Animations API + View Transitions API (native)      |
 | Icons / charts   | lucide-react, Recharts                                  |
 | Storage          | SQLite (local file)                                     |
 | Build / tooling  | Vite, Bun, Cargo                                        |
@@ -123,12 +124,19 @@ src-tauri/                 # Rust backend
     models.rs  state.rs  error.rs
   icons/                   # app icons (source.svg + generated sets)
 src/                       # React frontend
-  lib/       (types, api, utils, markdown, favicon)
+  lib/       (types, api, utils, markdown, favicon, motion, accents)
   store/     (zustand stores)
   components/(Sidebar, Topbar, Modal, Toast, ...)
   features/  (dashboard, vault, notes, tasks, calendar, income, folders,
               favorites, generator, health, activity, settings, auth)
+tools/                     # headless test harness (Playwright + WebKitGTK)
+  qvmock.py           # mock Tauri IPC so the UI runs without the Rust backend
+  harness.py          # scroll-jank + View Transition benchmark
+  webkit_vt_test.py   # verify View Transitions on the real Tauri webview engine
+  check_anims.py      # count lingering animations after idle (must be 0)
+  capture_vt.py       # capture circular-reveal frames
 SPEC.md / FINAL-CONTRACT.md / WAVE3-CONTRACT.md / WAVE4-CONTRACT.md
+QVAULT-MOTION-CONTRACT.md / KEEPR-PARITY-CONTRACT.md
                            # frozen interface contracts used to build this
 ```
 

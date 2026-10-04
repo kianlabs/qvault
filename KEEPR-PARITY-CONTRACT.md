@@ -41,7 +41,8 @@ Full Screen Mode, Search, Dashboard - World Clock.
 - **JANGAN ubah signature store/api.** Kalau butuh data baru, pakai store yang
   sudah ada.
 - **JANGAN tambah dependency baru.**
-- Pertahankan animasi GSAP yang sudah ada (`useGsap`, `staggerIn`, `pageEnter`).
+- Pertahankan animasi yang sudah ada (`useGsap`, `staggerIn`, `pageEnter`) —
+  kini berbasis **Web Animations API native**, tanpa library eksternal.
 - Nama ekspor/komponen harus tetap sama agar tidak memutus import.
 - Setiap file harus lolos `npx tsc --noEmit`.
 
