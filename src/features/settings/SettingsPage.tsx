@@ -45,7 +45,6 @@ import {
   Input,
   PageHeader,
   RowActions,
-  Toggle,
 } from "../../components/ui";
 import { cn, errorMessage } from "../../lib/utils";
 import { staggerIn, useGsap } from "../../lib/motion";
@@ -116,7 +115,6 @@ export default function SettingsPage() {
   const [tplBody, setTplBody] = useState("");
 
   // Wave 4 — auto-backup + import browser.
-  const [autoBackupEnabled, setAutoBackupEnabled] = useState(false);
   const [backupBusy, setBackupBusy] = useState(false);
   const [showBackups, setShowBackups] = useState(false);
   const [backupPaths, setBackupPaths] = useState<string[]>([]);
@@ -712,18 +710,12 @@ export default function SettingsPage() {
 
         {/* Auto-backup (Wave 4) */}
         <div className="space-y-3 rounded-xl border border-line bg-surface p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-ink">Automatic backups</p>
-              <p className="text-xs text-muted">
-                Snapshot the encrypted database on a schedule. Keeps the last 5.
-              </p>
-            </div>
-            <Toggle
-              checked={autoBackupEnabled}
-              onChange={setAutoBackupEnabled}
-              label="Enable automatic backups"
-            />
+          <div>
+            <p className="text-sm font-semibold text-ink">Backups</p>
+            <p className="text-xs text-muted">
+              Snapshot the encrypted database anytime — keeps the latest 5.
+              Daily automatic snapshots run via the system backup timer.
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
