@@ -157,8 +157,8 @@ export function pulse(el: Element | null): void {
 
 type ViewTransitionLike = { ready: Promise<void>; finished: Promise<void> };
 
-/** Durasi reveal (ms). Cukup cepat agar tidak terasa lambat, cukup halus. */
-const THEME_DUR = 520;
+/** Durasi reveal (ms). Disamakan persis dengan web CV. */
+const THEME_DUR = 800;
 
 /**
  * Tukar tema dengan reveal lingkaran dari `toggleEl`.

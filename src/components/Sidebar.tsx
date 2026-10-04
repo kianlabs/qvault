@@ -119,7 +119,11 @@ export default function Sidebar() {
           aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
           className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition-colors duration-150 hover:bg-raised hover:text-ink"
         >
-          {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          {/* Sun & Moon ditumpuk lalu crossfade (rotate/scale) — paritas web CV. */}
+          <span className="relative inline-block h-4 w-4" aria-hidden="true">
+            <Sun className="absolute inset-0 h-full w-full transition-all duration-500 ease-out rotate-90 scale-0 opacity-0 dark:rotate-0 dark:scale-100 dark:opacity-100" />
+            <Moon className="absolute inset-0 h-full w-full transition-all duration-500 ease-out rotate-0 scale-100 opacity-100 dark:-rotate-90 dark:scale-0 dark:opacity-0" />
+          </span>
         </button>
       </div>
 
