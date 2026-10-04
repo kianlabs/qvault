@@ -118,21 +118,14 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Sapaan — foto profil anime + teks sambutan. */}
-      <header className="flex items-center gap-4">
-        <img
-          src="/avatar-anime.jpg"
-          alt={displayName || "Profile"}
-          className="h-12 w-12 shrink-0 rounded-full object-cover ring-2 ring-line"
-        />
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-ink">
-            {greeting()}, {displayName || "there"}.
-          </h1>
-          <p className="mt-1 text-sm text-muted">
-            Here's everything across your Life OS.
-          </p>
-        </div>
+      {/* Sapaan — teks sambutan. Avatar profil hanya di sidebar. */}
+      <header>
+        <h1 className="text-2xl font-semibold tracking-tight text-ink">
+          {greeting()}, {displayName || "there"}.
+        </h1>
+        <p className="mt-1 text-sm text-muted">
+          Here's everything across your Life OS.
+        </p>
       </header>
 
       {/* Kartu ringkas */}
