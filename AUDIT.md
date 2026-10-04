@@ -2,8 +2,36 @@
 
 **Tanggal:** 2026-10-04
 **Lingkup:** seluruh repo `/home/kian/Projects/qvault` (Rust/Tauri v2 + React 19 + TS + SQLite)
-**Sifat:** audit read-only. Tidak ada file sumber yang diubah. Working tree bersih (`git status --short` kosong) kecuali artefak build `dist/` dari verifikasi.
+**Sifat:** audit awal read-only. Seluruh temuan (1 Critical, 1 High, 2 Medium, 12 Low, 1 Drift) **sudah diperbaiki** pada commit `ef58edf` — lihat §Status Perbaikan.
 **Ground truth:** kode = realitas; dokumen kontrak (`SPEC.md` < `FINAL-CONTRACT.md` < `WAVE3-CONTRACT.md` < `WAVE4-CONTRACT.md` < `WAVE5-CONTRACT.md`) = intent. Drift antara keduanya dilaporkan sebagai temuan tersendiri.
+
+---
+
+## Status Perbaikan (2026-10-04, commit `ef58edf`)
+
+Semua temuan ditutup. Verifikasi segar pasca-perbaikan: `cargo fmt --check` (0), `cargo clippy --all-targets -- -D warnings` (0, tanpa warning), `cargo test` (**28 lulus**, naik dari 14 — 14 uji regresi baru), `bunx tsc --noEmit` (0), `bun run build` (0).
+
+| # | Temuan | Status | Bukti |
+|---|---|---|---|
+| C1 | Edit item menghapus secret TOTP | ✅ FIXED | `VaultItemPayload.totp: Option<Option<String>>` tri-state (`models.rs`), `update_vault_item_impl` SQL dinamis (`vault.rs`), `openEdit` kirim `totp: undefined` (`VaultPage.tsx`). 4 uji: `update_without_totp_preserves_secret`, `update_with_null_totp_clears_secret`, `update_with_totp_sets_secret`, `deserialize_tri_state` |
+| H1 | Klaim backup harian tanpa scheduler | ✅ FIXED | `src-tauri/src/scheduler.rs` (thread cek tiap jam, `should_run` ≥24 jam), setting `auto_backup_enabled` + toggle UI, teks `README.md:47` & `SettingsPage.tsx:720` diperbaiki. 6 uji |
+| M1 | Tanpa rate-limit unlock | ✅ FIXED | `UnlockGuard` (`state.rs`) + backoff eksponensial (`security.rs`), diterapkan di `unlock_vault` **dan** `change_master_password`. 2 uji |
+| M2 | Auto-lock abaikan blur/visibility | ✅ FIXED | listener `blur` + `visibilitychange` di `useAutoLock` (`App.tsx`) |
+| L1 | Default fontSize inkonsisten | ✅ FIXED | `settings.rs:23` `unwrap_or(15)`, `App.tsx:97` `?? 15`, `SettingsPage.tsx:101` `useState(15)` |
+| L2 | Modulo bias generator password | ✅ FIXED | rejection sampling di `utils.ts` |
+| L3 | Clipboard slot tunggal | ✅ FIXED | Map multi-timer (key unik per copy) + `min={5}` di UI |
+| L4 | ErrorBoundary bocorkan URL | ✅ FIXED | baris `url:` dihapus (`ErrorBoundary.tsx`) |
+| L5 | Password reveal bertahan di state | ✅ FIXED | `useEffect` bersihkan id hilang + reset saat blur/visibility hidden (`VaultPage.tsx`) |
+| L6 | `version` backup tak divalidasi | ✅ FIXED | `import_backup_impl` tolak versi ≠1 (`data.rs`). 1 uji |
+| L7 | `reset_vault` tak hapus `templates` | ✅ FIXED | `DELETE FROM templates;` (`security.rs:309`) |
+| L8 | Teks backup janjikan `setting` | ✅ FIXED | `SettingsPage.tsx:621` → "…every item, note, task and folder." |
+| L9 | CI tanpa clippy/fmt | ✅ FIXED | `ci.yml` + `cargo fmt --check` + `clippy -D warnings`; 4 dead code dihapus; `totp.rs` RangeInclusive |
+| L10 | Persist tema gagal senyap | ✅ FIXED | `console.warn` di `useThemeStore.ts` |
+| L11 | Password backup tanpa validasi | ✅ FIXED | `validate_password` (→`pub(crate)`) dipanggil di `export_backup_impl` & `import_backup_impl`. 1 uji |
+| L12 | Clone `Key` (hardening) | ✅ Diverifikasi aman | `.clone()` di `dek()` hanya clone `Option` di luar lock lalu drop (zeroize); tidak diubah |
+| D1 | Drift favicon | ✅ FIXED (kontrak) | `WAVE3-CONTRACT.md` §D diselaraskan: `faviconUrl` selalu `null` (privasi) |
+
+> **Catatan operasional:** binary rilis yang terpasang di PC ini (`src-tauri/target/release/qvault`, dibangun 2026-10-04 15:22) **lebih tua** dari commit perbaikan (`ef58edf`, 18:53). Perlu `bun run tauri build` (atau `cargo build --release`) agar versi terpasang menyamai source yang diperbaiki.
 
 ---
 
