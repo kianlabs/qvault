@@ -53,7 +53,7 @@ pub struct Task {
     pub id: String,
     pub title: String,
     pub description: Option<String>,
-    pub status: String,   // 'todo' | 'in_progress' | 'done'
+    pub status: String, // 'todo' | 'in_progress' | 'done'
     pub priority: String,
     pub due_date: Option<String>,
     pub tags: Vec<String>,
@@ -263,8 +263,8 @@ pub struct IncomeMonthTotal {
 pub struct Template {
     pub id: String,
     pub name: String,
-    pub kind: String,   // 'note' | 'task'
-    pub body: String,   // JSON string
+    pub kind: String, // 'note' | 'task'
+    pub body: String, // JSON string
     pub created_at: String,
     pub updated_at: String,
 }

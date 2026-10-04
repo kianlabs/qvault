@@ -223,9 +223,18 @@ mod tests {
                         favorite,icon,created_at,updated_at)
                      VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",
                     rusqlite::params![
-                        "v2", "GitHub", Option::<String>::None, Option::<String>::None,
-                        "https://github.com", Option::<String>::None, "[]",
-                        Option::<String>::None, 0i64, Option::<String>::None, ts, ts,
+                        "v2",
+                        "GitHub",
+                        Option::<String>::None,
+                        Option::<String>::None,
+                        "https://github.com",
+                        Option::<String>::None,
+                        "[]",
+                        Option::<String>::None,
+                        0i64,
+                        Option::<String>::None,
+                        ts,
+                        ts,
                     ],
                 )?;
                 Ok(())
@@ -249,11 +258,10 @@ mod tests {
         let (has, stored_is_plain) = state
             .db
             .with(|conn| {
-                let blob: Option<String> = conn.query_row(
-                    "SELECT totp_enc FROM vault_items WHERE id='v2'",
-                    [],
-                    |r| r.get(0),
-                )?;
+                let blob: Option<String> =
+                    conn.query_row("SELECT totp_enc FROM vault_items WHERE id='v2'", [], |r| {
+                        r.get(0)
+                    })?;
                 let is_plain = blob.as_deref() == Some(secret);
                 Ok((blob.map(|s| !s.is_empty()).unwrap_or(false), is_plain))
             })
@@ -265,11 +273,10 @@ mod tests {
         let code = state
             .db
             .with(|conn| {
-                let blob: Option<String> = conn.query_row(
-                    "SELECT totp_enc FROM vault_items WHERE id='v2'",
-                    [],
-                    |r| r.get(0),
-                )?;
+                let blob: Option<String> =
+                    conn.query_row("SELECT totp_enc FROM vault_items WHERE id='v2'", [], |r| {
+                        r.get(0)
+                    })?;
                 let s = dec_str(&dek_key, &blob);
                 let bytes = decode_secret(&s)?;
                 let (c, _) = totp_at(&bytes, chrono::Utc::now().timestamp())?;
@@ -284,11 +291,10 @@ mod tests {
             .db
             .with(|conn| {
                 conn.execute("UPDATE vault_items SET totp_enc = NULL WHERE id='v2'", [])?;
-                let blob: Option<String> = conn.query_row(
-                    "SELECT totp_enc FROM vault_items WHERE id='v2'",
-                    [],
-                    |r| r.get(0),
-                )?;
+                let blob: Option<String> =
+                    conn.query_row("SELECT totp_enc FROM vault_items WHERE id='v2'", [], |r| {
+                        r.get(0)
+                    })?;
                 assert!(!blob.map(|s| !s.is_empty()).unwrap_or(false));
                 Ok(())
             })

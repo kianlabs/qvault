@@ -54,12 +54,7 @@ pub(crate) fn new_id() -> String {
 // ---------------------------------------------------------------------------
 
 /// Pastikan `table.col` ada; tambahkan `ALTER TABLE ... ADD COLUMN` bila belum.
-pub(crate) fn ensure_column(
-    conn: &Connection,
-    table: &str,
-    col: &str,
-    decl: &str,
-) -> Result<()> {
+pub(crate) fn ensure_column(conn: &Connection, table: &str, col: &str, decl: &str) -> Result<()> {
     // PRAGMA tidak menerima bound parameter untuk nama tabel → pakai format!.
     // Nama tabel/kolom di sini konstanta internal (bukan input user).
     let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
@@ -76,10 +71,7 @@ pub(crate) fn ensure_column(
     drop(stmt);
 
     if !exists {
-        conn.execute(
-            &format!("ALTER TABLE {table} ADD COLUMN {col} {decl}"),
-            [],
-        )?;
+        conn.execute(&format!("ALTER TABLE {table} ADD COLUMN {col} {decl}"), [])?;
     }
     Ok(())
 }

@@ -22,8 +22,11 @@ pub fn get_settings(state: State<'_, AppState>) -> Result<Settings> {
         let accent = get_setting(conn, "accent")?.unwrap_or_else(|| "slate".to_string());
         let font_size = parse_i64(get_setting(conn, "font_size")?).unwrap_or(14);
         let auto_lock_min = parse_i64(get_setting(conn, "auto_lock_min")?).unwrap_or(15);
-        let clipboard_clear_sec = parse_i64(get_setting(conn, "clipboard_clear_sec")?).unwrap_or(30);
-        let show_icons = get_setting(conn, "show_icons")?.map(|s| s != "0" && s != "false").unwrap_or(true);
+        let clipboard_clear_sec =
+            parse_i64(get_setting(conn, "clipboard_clear_sec")?).unwrap_or(30);
+        let show_icons = get_setting(conn, "show_icons")?
+            .map(|s| s != "0" && s != "false")
+            .unwrap_or(true);
 
         Ok(Settings {
             display_name,

@@ -10,9 +10,7 @@ use crate::error::{AppError, Result};
 use crate::models::{Note, NotePayload};
 use crate::state::AppState;
 
-use super::{
-    dec_str, dek, enc_opt, log_activity, new_id, now, tags_from_json, tags_to_json,
-};
+use super::{dec_str, dek, enc_opt, log_activity, new_id, now, tags_from_json, tags_to_json};
 
 const COLS: &str = "id, title, content_enc, tags, folder_id, favorite, created_at, updated_at";
 
@@ -62,7 +60,11 @@ pub fn list_notes(
         if let Some(term) = &search_term {
             items.retain(|n| {
                 n.title.to_lowercase().contains(term)
-                    || n.content.as_deref().unwrap_or("").to_lowercase().contains(term)
+                    || n.content
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .contains(term)
             });
         }
         if let Some(fid) = folder_filter {

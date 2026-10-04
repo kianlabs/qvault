@@ -22,7 +22,8 @@ fn map_row(row: &Row<'_>) -> rusqlite::Result<ActivityEntry> {
 
 /// Ambil `limit` entri terbaru. Dipakai `list_activity` dan `dashboard_stats`.
 pub(crate) fn fetch_activity(conn: &Connection, limit: i64) -> Result<Vec<ActivityEntry>> {
-    let sql = format!("SELECT {COLS} FROM activity_log ORDER BY created_at DESC, rowid DESC LIMIT ?1");
+    let sql =
+        format!("SELECT {COLS} FROM activity_log ORDER BY created_at DESC, rowid DESC LIMIT ?1");
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt
         .query_map(rusqlite::params![limit], map_row)?

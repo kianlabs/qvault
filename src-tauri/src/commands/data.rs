@@ -324,10 +324,10 @@ fn spec_for(kind: &str) -> Result<CsvSpec> {
 /// Indeks kolom sensitif (yang perlu di-dekripsi) untuk tiap kind.
 fn sensitive_cols(kind: &str) -> &'static [usize] {
     match kind {
-        "vault" => &[2, 3, 5],  // username, password, notes
-        "notes" => &[2],        // content
-        "tasks" => &[2],        // description
-        "income" => &[6],       // notes
+        "vault" => &[2, 3, 5], // username, password, notes
+        "notes" => &[2],       // content
+        "tasks" => &[2],       // description
+        "income" => &[6],      // notes
         _ => &[],
     }
 }
@@ -345,12 +345,8 @@ fn read_csv_rows(conn: &Connection, kind: &str) -> Result<Vec<Vec<String>>> {
                     rusqlite::types::ValueRef::Null => String::new(),
                     rusqlite::types::ValueRef::Integer(n) => n.to_string(),
                     rusqlite::types::ValueRef::Real(f) => f.to_string(),
-                    rusqlite::types::ValueRef::Text(t) => {
-                        String::from_utf8_lossy(t).into_owned()
-                    }
-                    rusqlite::types::ValueRef::Blob(b) => {
-                        String::from_utf8_lossy(b).into_owned()
-                    }
+                    rusqlite::types::ValueRef::Text(t) => String::from_utf8_lossy(t).into_owned(),
+                    rusqlite::types::ValueRef::Blob(b) => String::from_utf8_lossy(b).into_owned(),
                 };
                 out.push(v);
             }
@@ -414,7 +410,11 @@ pub fn import_csv(state: State<'_, AppState>, kind: String, path: String) -> Res
 }
 
 /// Isi `import_csv` tanpa wrapper `State` (agar bisa diuji runtime).
-pub(crate) fn import_csv_impl(state: &AppState, kind: String, path: String) -> Result<ImportResult> {
+pub(crate) fn import_csv_impl(
+    state: &AppState,
+    kind: String,
+    path: String,
+) -> Result<ImportResult> {
     let key = dek(state)?;
     state.db.with(|conn| {
         // Pastikan kind dikenal (juga menentukan kolom wajib).
@@ -699,9 +699,12 @@ fn backups_dir() -> Result<std::path::PathBuf> {
         .map(std::path::PathBuf::from)
         .filter(|p| !p.as_os_str().is_empty())
         .or_else(|| {
-            std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local").join("share"))
+            std::env::var_os("HOME")
+                .map(|h| std::path::PathBuf::from(h).join(".local").join("share"))
         })
-        .ok_or_else(|| AppError::Msg("tidak bisa menentukan data dir (HOME/XDG_DATA_HOME)".into()))?;
+        .ok_or_else(|| {
+            AppError::Msg("tidak bisa menentukan data dir (HOME/XDG_DATA_HOME)".into())
+        })?;
     Ok(base.join("qvault").join("backups"))
 }
 
@@ -1086,7 +1089,10 @@ mod tests {
 
         // Sanity: derive_key deterministik untuk salt yang sama.
         let salt = new_salt();
-        assert_eq!(derive_key("x", &salt).unwrap(), derive_key("x", &salt).unwrap());
+        assert_eq!(
+            derive_key("x", &salt).unwrap(),
+            derive_key("x", &salt).unwrap()
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1117,11 +1123,12 @@ mod tests {
         let (title, pw, user) = state
             .db
             .with(|conn| {
-                let (t, p_blob, u_blob): (String, Option<String>, Option<String>) = conn.query_row(
-                    "SELECT title, password_enc, username_enc FROM vault_items LIMIT 1",
-                    [],
-                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-                )?;
+                let (t, p_blob, u_blob): (String, Option<String>, Option<String>) = conn
+                    .query_row(
+                        "SELECT title, password_enc, username_enc FROM vault_items LIMIT 1",
+                        [],
+                        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                    )?;
                 Ok((t, dec_str(&dek_key, &p_blob), dec_str(&dek_key, &u_blob)))
             })
             .unwrap();
@@ -1225,7 +1232,10 @@ mod tests {
         }
 
         let dest = auto_backup_now_impl(&state).unwrap();
-        assert!(std::path::Path::new(&dest).exists(), "file backup harus ada");
+        assert!(
+            std::path::Path::new(&dest).exists(),
+            "file backup harus ada"
+        );
         assert!(dest.ends_with(".db"));
 
         // 5 lama + 1 baru = 6 → prune menyisakan 5 terbaru.

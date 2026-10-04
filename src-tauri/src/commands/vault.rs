@@ -77,8 +77,18 @@ pub fn list_vault_items(
         if let Some(term) = &search_term {
             items.retain(|it| {
                 it.title.to_lowercase().contains(term)
-                    || it.username.as_deref().unwrap_or("").to_lowercase().contains(term)
-                    || it.url.as_deref().unwrap_or("").to_lowercase().contains(term)
+                    || it
+                        .username
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .contains(term)
+                    || it
+                        .url
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .contains(term)
             });
         }
         if let Some(fid) = folder_filter {
@@ -178,7 +188,10 @@ pub fn delete_vault_item(state: State<'_, AppState>, id: String) -> Result<()> {
                 |row| row.get::<_, String>(0),
             )
             .optional()?;
-        conn.execute("DELETE FROM vault_items WHERE id = ?1", rusqlite::params![id])?;
+        conn.execute(
+            "DELETE FROM vault_items WHERE id = ?1",
+            rusqlite::params![id],
+        )?;
         log_activity(conn, "vault", "delete", title.as_deref())?;
         Ok(())
     })

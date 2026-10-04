@@ -14,7 +14,8 @@ use crate::state::AppState;
 
 use super::{dec_str, dek, enc_opt, log_activity, new_id, now};
 
-const COLS: &str = "id, source, amount, currency, category, date, notes_enc, created_at, updated_at";
+const COLS: &str =
+    "id, source, amount, currency, category, date, notes_enc, created_at, updated_at";
 
 fn map_row(row: &Row<'_>, key: &Key) -> rusqlite::Result<Income> {
     Ok(Income {
@@ -76,7 +77,11 @@ pub fn list_income(state: State<'_, AppState>, search: Option<String>) -> Result
             items.retain(|i| {
                 i.source.to_lowercase().contains(term)
                     || i.category.to_lowercase().contains(term)
-                    || i.notes.as_deref().unwrap_or("").to_lowercase().contains(term)
+                    || i.notes
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .contains(term)
             });
         }
         Ok(items)
@@ -163,7 +168,9 @@ pub fn delete_income(state: State<'_, AppState>, id: String) -> Result<()> {
 pub fn income_summary(state: State<'_, AppState>) -> Result<IncomeSummary> {
     state.db.with(|conn| {
         let all_time: f64 =
-            conn.query_row("SELECT COALESCE(SUM(amount), 0) FROM income", [], |r| r.get(0))?;
+            conn.query_row("SELECT COALESCE(SUM(amount), 0) FROM income", [], |r| {
+                r.get(0)
+            })?;
 
         let months = last_six_months();
         let mut by_month = Vec::with_capacity(months.len());

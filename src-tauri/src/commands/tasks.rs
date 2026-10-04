@@ -183,8 +183,11 @@ pub fn dashboard_stats(state: State<'_, AppState>) -> Result<DashboardStats> {
             |r| r.get(0),
         )?;
 
-        let tasks_done: i64 =
-            conn.query_row("SELECT COUNT(*) FROM tasks WHERE status = 'done'", [], |r| r.get(0))?;
+        let tasks_done: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM tasks WHERE status = 'done'",
+            [],
+            |r| r.get(0),
+        )?;
 
         // Pemasukan bulan berjalan.
         let income_this_month: f64 = conn.query_row(

@@ -38,8 +38,7 @@ fn wrap_dek(master_key: &Key, dek: &Key) -> Result<String> {
 
 /// Buka (unwrap) DEK dengan master key. Blob rusak / password salah → error.
 fn unwrap_dek(master_key: &Key, wrapped: &str) -> Result<Key> {
-    let bytes = decrypt(master_key, wrapped)
-        .map_err(|_| AppError::Msg("password salah".into()))?;
+    let bytes = decrypt(master_key, wrapped).map_err(|_| AppError::Msg("password salah".into()))?;
     if bytes.len() != 32 {
         return Err(AppError::Msg("DEK tidak valid".into()));
     }
@@ -108,7 +107,11 @@ pub fn init_vault(state: State<'_, AppState>, master_password: String) -> Result
         let dek = random_key();
 
         set_setting(conn, "pwd_salt", &b64_encode(&salt))?;
-        set_setting(conn, "pwd_verifier", &encrypt(&master_key, VERIFIER_PLAINTEXT)?)?;
+        set_setting(
+            conn,
+            "pwd_verifier",
+            &encrypt(&master_key, VERIFIER_PLAINTEXT)?,
+        )?;
         set_setting(conn, "dek_wrapped", &wrap_dek(&master_key, &dek)?)?;
         log_activity(conn, "security", "init", None)?;
         Ok(dek)
@@ -149,7 +152,9 @@ pub fn lock_vault(state: State<'_, AppState>) -> Result<()> {
         .vault_key
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
-    state.db.with(|conn| log_activity(conn, "security", "lock", None))
+    state
+        .db
+        .with(|conn| log_activity(conn, "security", "lock", None))
 }
 
 #[tauri::command]
@@ -174,7 +179,11 @@ pub fn change_master_password(
         let new_salt = new_salt();
         let new_key = derive_key_bytes(&new_password, &new_salt)?;
         set_setting(conn, "pwd_salt", &b64_encode(&new_salt))?;
-        set_setting(conn, "pwd_verifier", &encrypt(&new_key, VERIFIER_PLAINTEXT)?)?;
+        set_setting(
+            conn,
+            "pwd_verifier",
+            &encrypt(&new_key, VERIFIER_PLAINTEXT)?,
+        )?;
         set_setting(conn, "dek_wrapped", &wrap_dek(&new_key, &dek)?)?;
         log_activity(conn, "security", "change_master_password", None)?;
         Ok(())
