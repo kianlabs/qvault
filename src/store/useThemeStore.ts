@@ -11,6 +11,18 @@ import type { Theme } from "../lib/types";
 /** Tema keluarga gelap — dipakai untuk varian `dark` Tailwind & ikon toggle. */
 const DARK_THEMES: Theme[] = ["dark", "slate", "nord"];
 
+/** Kunci cache tema (dibaca skrip inline di index.html sebelum React mount). */
+const THEME_CACHE_KEY = "qv-theme";
+
+/** Tulis tema ke cache lokal — sinkron & murah, mencegah kedipan saat start. */
+function cacheTheme(theme: Theme): void {
+  try {
+    localStorage.setItem(THEME_CACHE_KEY, theme);
+  } catch {
+    /* storage bisa diblokir; abaikan — tema tetap jalan dari backend */
+  }
+}
+
 export function isDarkTheme(theme: Theme): boolean {
   return DARK_THEMES.includes(theme);
 }
@@ -30,6 +42,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
 
   setTheme: (theme) => {
     set({ theme });
+    cacheTheme(theme);
     void api.updateSettings({ theme }).catch(() => {
       /* diamkan: UI tetap responsif; settings akan tersinkron lagi */
     });
@@ -40,5 +53,8 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     get().setTheme(next);
   },
 
-  sync: (theme) => set({ theme }),
+  sync: (theme) => {
+    set({ theme });
+    cacheTheme(theme);
+  },
 }));

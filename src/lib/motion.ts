@@ -1,11 +1,15 @@
-// QVAULT — GSAP motion layer (Calm Precision).
+// QVAULT — motion layer (Calm Precision).
 //
 // Prinsip: gerak harus *membantu*, bukan menghibur. Semua animasi hanya
 // menyentuh `opacity` dan `transform` (GPU-friendly), durasinya pendek, dan
 // otomatis dimatikan bila OS meminta reduced-motion. Tak ada animasi yang
 // memblokir input pengguna.
+//
+// Implementasi memakai **Web Animations API (WAAPI) native** — bukan library
+// eksternal. Ini menghapus ~27 KB (gzip) dependensi runtime, animasi berjalan
+// di compositor thread (lebih ringan & mulus), dan bundel jadi lebih ramping.
+// API yang diekspor tetap sama seperti sebelumnya agar pemanggil tak berubah.
 import { useEffect, useRef, type RefObject } from "react";
-import gsap from "gsap";
 
 /** Hormati setelan aksesibilitas OS. */
 export function prefersReducedMotion(): boolean {
@@ -15,20 +19,45 @@ export function prefersReducedMotion(): boolean {
   );
 }
 
-/** Apakah GSAP boleh menganimasikan? (sekali cek, dipakai berulang) */
+/** Apakah animasi boleh berjalan? (sekali cek, dipakai berulang) */
 export const motionOK = !prefersReducedMotion();
 
 // ---------------------------------------------------------------------------
-// Timeline yang dipakai berulang
+// Kurva easing (padanan GSAP → cubic-bezier WAAPI)
+// ---------------------------------------------------------------------------
+const EASE_OUT = "cubic-bezier(0.215, 0.61, 0.355, 1)"; // ≈ power2.out
+const EASE_SMOOTH = "cubic-bezier(0.76, 0, 0.24, 1)"; // ≈ expo/quart in-out
+
+// ---------------------------------------------------------------------------
+// Pelacakan animasi untuk pembersihan (dipakai useGsap)
+// ---------------------------------------------------------------------------
+let _sink: Animation[] | null = null;
+
+function _track(anim: Animation | undefined): void {
+  if (anim && _sink) _sink.push(anim);
+}
+
+/** Batalkan animasi lama pada satu elemen agar restart bersih (tak menumpuk). */
+function _cancelOn(el: Element): void {
+  el.getAnimations().forEach((a) => a.cancel());
+}
+
+// ---------------------------------------------------------------------------
+// Primitif animasi
 // ---------------------------------------------------------------------------
 
-/** Halaman masuk: konten naik halus + fade. */
+/** Halaman/kontainer masuk: naik halus + fade. */
 export function pageEnter(el: Element | null): void {
   if (!el || !motionOK) return;
-  gsap.fromTo(
-    el,
-    { autoAlpha: 0, y: 10 },
-    { autoAlpha: 1, y: 0, duration: 0.32, ease: "power2.out", clearProps: "transform" },
+  _cancelOn(el);
+  _track(
+    el.animate(
+      [
+        { opacity: 0, transform: "translateY(10px)" },
+        { opacity: 1, transform: "translateY(0)" },
+      ],
+      { duration: 360, easing: EASE_OUT, fill: "both" },
+    ),
   );
 }
 
@@ -41,38 +70,73 @@ export function staggerIn(
   if (!container || !motionOK) return;
   const targets = container.querySelectorAll(selector);
   if (targets.length === 0) return;
-  gsap.fromTo(
-    targets,
-    { autoAlpha: 0, y: opts.y ?? 8 },
-    {
-      autoAlpha: 1,
-      y: 0,
-      duration: opts.duration ?? 0.28,
-      stagger: opts.stagger ?? 0.035,
-      delay: opts.delay ?? 0,
-      ease: "power2.out",
-      clearProps: "transform",
-    },
-  );
+
+  // Durasi & stagger dalam detik (kompatibel dgn pemanggil lama).
+  const y = opts.y ?? 8;
+  const durMs = (opts.duration ?? 0.28) * 1000;
+  const staggerMs = (opts.stagger ?? 0.035) * 1000;
+  const baseDelay = (opts.delay ?? 0) * 1000;
+
+  targets.forEach((t, i) => {
+    _cancelOn(t);
+    _track(
+      t.animate(
+        [
+          { opacity: 0, transform: `translateY(${y}px)` },
+          { opacity: 1, transform: "translateY(0)" },
+        ],
+        {
+          duration: durMs,
+          delay: baseDelay + i * staggerMs,
+          easing: EASE_OUT,
+          fill: "both",
+        },
+      ),
+    );
+  });
 }
 
 /** Kartu/panel muncul dengan sedikit skala — untuk modal & popover. */
 export function popIn(el: Element | null): void {
   if (!el || !motionOK) return;
-  gsap.fromTo(
-    el,
-    { autoAlpha: 0, y: 6, scale: 0.985 },
-    { autoAlpha: 1, y: 0, scale: 1, duration: 0.2, ease: "power2.out", clearProps: "transform" },
+  _cancelOn(el);
+  _track(
+    el.animate(
+      [
+        { opacity: 0, transform: "translateY(6px) scale(0.985)" },
+        { opacity: 1, transform: "translateY(0) scale(1)" },
+      ],
+      { duration: 220, easing: EASE_OUT, fill: "both" },
+    ),
+  );
+}
+
+/** Fade sederhana (mis. overlay modal). */
+export function fadeIn(el: Element | null, durationSec = 0.22): void {
+  if (!el || !motionOK) return;
+  _cancelOn(el);
+  _track(
+    el.animate([{ opacity: 0 }, { opacity: 1 }], {
+      duration: durationSec * 1000,
+      easing: EASE_OUT,
+      fill: "both",
+    }),
   );
 }
 
 /** Umpan balik singkat saat nilai berubah (mis. skor, saldo). */
 export function pulse(el: Element | null): void {
   if (!el || !motionOK) return;
-  gsap.fromTo(
-    el,
-    { scale: 1 },
-    { scale: 1.03, duration: 0.12, yoyo: true, repeat: 1, ease: "power1.inOut", clearProps: "transform" },
+  _cancelOn(el);
+  _track(
+    el.animate(
+      [
+        { transform: "scale(1)" },
+        { transform: "scale(1.03)" },
+        { transform: "scale(1)" },
+      ],
+      { duration: 240, easing: "ease-in-out" },
+    ),
   );
 }
 
@@ -83,7 +147,7 @@ export function pulse(el: Element | null): void {
  * dipasang menutupi viewport, lalu digeser KELUAR ke kiri (translateX -100%)
  * sehingga tema BARU yang sudah terpasang di belakangnya terungkap seperti
  * lembaran yang di-slide. Konten ikut bergeser sedikit dari kanan (parallax)
- * supaya terasa seperti perpindahan slide, bukan sekadar fade.
+ * supaya terasa seperti perpindahan slide yang tenang & halus.
  *
  * `fromBg` HARUS dibaca SEBELUM class tema di `<html>` ditukar.
  *
@@ -97,7 +161,7 @@ export function themeSwap(fromBg: string, content: Element | null): void {
   // Buang tirai lama bila pengguna menukar tema beruntun (hindari tumpukan).
   const prev = document.getElementById("qv-theme-veil");
   if (prev) {
-    gsap.killTweensOf(prev);
+    prev.getAnimations().forEach((a) => a.cancel());
     prev.remove();
   }
 
@@ -106,19 +170,16 @@ export function themeSwap(fromBg: string, content: Element | null): void {
   veil.setAttribute("aria-hidden", "true");
   veil.style.cssText =
     `position:fixed;inset:0;background:${fromBg};pointer-events:none;` +
-    `z-index:9999;will-change:transform;`;
+    `z-index:9999;will-change:transform;backface-visibility:hidden;`;
 
   // Tepi depan tirai — garis aksen tipis agar "lembaran" yang bergeser terlihat.
   const edge = document.createElement("div");
   edge.style.cssText =
     "position:absolute;top:0;right:0;width:2px;height:100%;" +
     "background:linear-gradient(180deg,transparent,var(--accent),transparent);" +
-    "opacity:0.5;";
+    "opacity:0.45;";
   veil.appendChild(edge);
   document.body.appendChild(veil);
-
-  const DUR = 0.6;
-  const EASE = "power3.inOut";
 
   // Reduced-motion: buang tirai seketika, tanpa gerak.
   // Cek dinamis saat pemanggilan (bukan nilai cache saat module-load) supaya
@@ -128,24 +189,30 @@ export function themeSwap(fromBg: string, content: Element | null): void {
     return;
   }
 
-  const tl = gsap.timeline({ onComplete: () => veil.remove() });
+  // Durasi sengaja dibuat lebih lambat & lembut supaya perpindahan terasa
+  // tenang (bukan kedip). Konten menyusul dengan geser kecil + fade.
+  const DUR_MS = 1000;
+  const EASE = EASE_SMOOTH;
 
-  // Tirai lama menggeser keluar ke kiri — mengungkap tema baru di belakangnya.
-  tl.to(veil, { xPercent: -100, duration: DUR, ease: EASE }, 0);
+  const veilAnim = veil.animate(
+    [{ transform: "translateX(0)" }, { transform: "translateX(-100%)" }],
+    { duration: DUR_MS, easing: EASE, fill: "forwards" },
+  );
+  veilAnim.finished
+    .then(() => veil.remove())
+    .catch(() => veil.remove());
+  _track(veilAnim);
 
-  // Konten menyusul dari kanan (parallax) → terasa seperti slide show.
   if (content) {
-    tl.fromTo(
-      content,
-      { xPercent: 6, autoAlpha: 0.55 },
-      {
-        xPercent: 0,
-        autoAlpha: 1,
-        duration: DUR,
-        ease: EASE,
-        clearProps: "transform,opacity,visibility",
-      },
-      0,
+    _cancelOn(content);
+    _track(
+      content.animate(
+        [
+          { opacity: 0.7, transform: "translateX(3.5%)" },
+          { opacity: 1, transform: "translateX(0)" },
+        ],
+        { duration: DUR_MS, easing: EASE, fill: "both" },
+      ),
     );
   }
 }
@@ -155,22 +222,27 @@ export function themeSwap(fromBg: string, content: Element | null): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Jalankan `fn` di dalam gsap.context() agar semua tween yang dibuat di
- * dalamnya otomatis dibersihkan saat komponen unmount / deps berubah.
- * Ini mencegah kebocoran animasi saat berpindah halaman.
- *
- * Catatan: `fn` sengaja TIDAK menerima context — memakai variabel `ctx` di
- * dalam callback gsap.context() menyebabkan TDZ error karena callback dijalankan
- * sinkron sebelum `const ctx` selesai diinisialisasi.
+ * Jalankan `fn` dan bersihkan otomatis semua animasi yang dibuat di dalamnya
+ * saat komponen unmount / deps berubah. Ini mencegah kebocoran animasi saat
+ * berpindah halaman.
  */
-export function useGsap(fn: () => void, deps: unknown[] = [], scope?: RefObject<HTMLElement | null>): void {
+export function useGsap(fn: () => void, deps: unknown[] = [], _scope?: RefObject<HTMLElement | null>): void {
   const fnRef = useRef(fn);
   fnRef.current = fn;
 
   useEffect(() => {
     if (!motionOK) return;
-    const ctx = gsap.context(() => fnRef.current(), scope?.current ?? undefined);
-    return () => ctx.revert();
+    const anims: Animation[] = [];
+    const prev = _sink;
+    _sink = anims;
+    try {
+      fnRef.current();
+    } finally {
+      _sink = prev;
+    }
+    return () => {
+      anims.forEach((a) => a.cancel());
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 }

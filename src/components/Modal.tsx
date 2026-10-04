@@ -1,11 +1,10 @@
 // QVAULT — shared Modal (Calm Precision).
-// Animasi masuk kini lewat GSAP (bukan kelas CSS) supaya konsisten dengan
-// gerak halaman lain dan otomatis dimatikan saat reduced-motion.
+// Animasi masuk lewat Web Animations API native (lihat lib/motion) supaya
+// konsisten dengan gerak halaman lain dan otomatis dimatikan saat reduced-motion.
 import { type ReactNode, useEffect, useRef } from "react";
 import { X } from "lucide-react";
-import gsap from "gsap";
 import { cn } from "../lib/utils";
-import { motionOK, popIn } from "../lib/motion";
+import { fadeIn, motionOK, popIn } from "../lib/motion";
 import IconButton from "./ui/IconButton";
 
 interface ModalProps {
@@ -40,14 +39,8 @@ export default function Modal({
   // Animasi masuk: overlay fade + panel naik halus.
   useEffect(() => {
     if (!open || !motionOK) return;
-    const tl = gsap.timeline();
-    if (overlayRef.current) {
-      tl.fromTo(overlayRef.current, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.18 });
-    }
+    fadeIn(overlayRef.current, 0.22);
     popIn(panelRef.current);
-    return () => {
-      tl.kill();
-    };
   }, [open]);
 
   if (!open) return null;

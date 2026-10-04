@@ -3,7 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Beri tahu engine warna dasar sejak awal: cegah "flash putih" saat app
+         dibuka dalam tema gelap (WebKitGTK memakai ini untuk canvas default). -->
+    <meta name="color-scheme" content="dark light" />
     <title>QVAULT</title>
+    <!-- Preload font self-hosted agar teks muncul tanpa FOUT (tanpa CDN luar). -->
+    <link
+      rel="preload"
+      href="/fonts/jetbrains-mono-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <script>
+      // Terapkan tema tersimpan SEBELUM React mount supaya tidak ada kedipan
+      // tema salah (FOUC). Hanya membaca cache lokal; gagal → pakai gelap.
+      try {
+        var t = localStorage.getItem("qv-theme") || "dark";
+        var dark = t === "dark" || t === "slate" || t === "nord";
+        document.documentElement.classList.add(t);
+        if (dark) document.documentElement.classList.add("dark");
+        document.documentElement.style.colorScheme = dark ? "dark" : "light";
+      } catch (e) {}
+    </script>
   </head>
 
   <body>

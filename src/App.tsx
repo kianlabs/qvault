@@ -109,8 +109,9 @@ function Shell() {
     root.classList.add(theme);
     if (theme === "slate" || theme === "nord") root.classList.add("dark");
 
-    // Efek GSAP saat berganti tema — lewati render pertama (agar tidak berkedip
-    // saat aplikasi baru dibuka). Veil cross-fade + konten "mendarat" halus.
+    // Efek transisi "slideshow" saat berganti tema — lewati render pertama
+    // (agar tidak berkedip saat aplikasi baru dibuka). Veil slide + konten
+    // "mendarat" halus.
     if (firstThemeRun.current) {
       firstThemeRun.current = false;
       return;

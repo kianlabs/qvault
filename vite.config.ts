@@ -40,7 +40,6 @@ export default defineConfig(() => ({
         // (Vite 8/rolldown memakai bentuk fungsi.)
         manualChunks(id: string) {
           if (id.includes("node_modules")) {
-            if (id.includes("gsap")) return "motion";
             if (
               id.includes("react-dom") ||
               id.includes("react-router") ||
