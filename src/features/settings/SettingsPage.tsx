@@ -541,8 +541,9 @@ export default function SettingsPage() {
           <div className="min-w-0">
             <p className="text-sm font-medium text-ink">Website icons</p>
             <p className="mt-0.5 text-xs text-muted">
-              Fetches site icons from DuckDuckGo. Domains may be sent, but never
-              usernames or passwords. Turn off for full offline privacy.
+              Shows each site's initial as a local avatar. Icons are rendered
+              entirely offline — no domains, URLs, or usernames ever leave this
+              device.
             </p>
           </div>
           <div className="inline-flex shrink-0 rounded-xl border border-line bg-surface p-1">
