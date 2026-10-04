@@ -14,6 +14,7 @@ use serde_json::{json, Map, Value};
 use tauri::State;
 
 use crate::crypto::{decrypt, derive_key, encrypt, new_salt, Key};
+use crate::db::restrict_permissions;
 use crate::error::{AppError, Result};
 use crate::models::{ImportResult, Template, TemplatePayload};
 use crate::state::AppState;
@@ -118,6 +119,10 @@ pub(crate) fn export_backup_impl(state: &AppState, path: String, password: Strin
 
     let contents = format!("{BACKUP_PREFIX}{}:{}", b64_encode(&salt), blob);
     std::fs::write(&path, contents)?;
+    // Backup berisi seluruh DB (kolom *_enc tetap terenkripsi) → batasi izin 0600.
+    if let Err(e) = restrict_permissions(&path) {
+        eprintln!("[qvault] gagal membatasi izin file backup: {e}");
+    }
 
     state.db.with(|conn| {
         log_activity(conn, "data", "backup", Some(&path))?;
@@ -186,8 +191,25 @@ pub(crate) fn import_backup_impl(state: &AppState, path: String, password: Strin
     })
 }
 
+/// Nama kolom asli sebuah tabel (dari `PRAGMA table_info`).
+/// `table` selalu konstanta internal (`BACKUP_TABLES`), bukan input user.
+fn table_columns(conn: &Connection, table: &str) -> Result<Vec<String>> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let mut rows = stmt.query([])?;
+    let mut cols = Vec::new();
+    while let Some(row) = rows.next()? {
+        cols.push(row.get::<_, String>(1)?); // kolom ke-1 = nama kolom
+    }
+    Ok(cols)
+}
+
 /// INSERT generik satu tabel dari array object JSON (kolom dinamis).
+///
+/// KEAMANAN: nama kolom berasal dari key JSON file backup, sehingga TIDAK boleh
+/// dipakai mentah sebagai identifier SQL (celah injeksi). Kita whitelist ke kolom
+/// asli tabel (`PRAGMA table_info`); key yang bukan kolom dikenal dibuang.
 fn insert_rows(conn: &Connection, table: &str, rows: &[Value]) -> Result<()> {
+    let valid = table_columns(conn, table)?;
     for row in rows {
         let obj = match row.as_object() {
             Some(o) if !o.is_empty() => o,
@@ -196,8 +218,14 @@ fn insert_rows(conn: &Connection, table: &str, rows: &[Value]) -> Result<()> {
         let mut cols: Vec<String> = Vec::with_capacity(obj.len());
         let mut vals: Vec<Option<String>> = Vec::with_capacity(obj.len());
         for (k, v) in obj {
+            if !valid.iter().any(|c| c == k) {
+                continue; // key bukan kolom tabel → abaikan (anti-injeksi)
+            }
             cols.push(k.clone());
             vals.push(vstr(v));
+        }
+        if cols.is_empty() {
+            continue;
         }
         let placeholders: Vec<String> = (1..=cols.len()).map(|i| format!("?{i}")).collect();
         let sql = format!(
@@ -369,6 +397,11 @@ pub(crate) fn export_csv_impl(state: &AppState, kind: String, path: String) -> R
         }
         wtr.flush()
             .map_err(|e| AppError::Msg(format!("gagal flush CSV: {e}")))?;
+        drop(wtr);
+        // CSV ekspor berisi kolom sensitif dalam PLAINTEXT → paksa izin 0600.
+        if let Err(e) = restrict_permissions(&path) {
+            eprintln!("[qvault] gagal membatasi izin file CSV ekspor: {e}");
+        }
 
         log_activity(conn, "data", "export", Some(&kind))?;
         Ok(())
@@ -696,6 +729,10 @@ pub(crate) fn auto_backup_now_impl(state: &AppState) -> Result<String> {
         conn.execute("VACUUM INTO ?1", rusqlite::params![dest_str])?;
         Ok(())
     })?;
+    // Backup otomatis = salinan penuh DB → batasi izin 0600.
+    if let Err(e) = restrict_permissions(&dest) {
+        eprintln!("[qvault] gagal membatasi izin backup otomatis: {e}");
+    }
 
     // Prune: urut nama DESC (nama memuat timestamp), sisakan KEEP_BACKUPS terbaru.
     let mut files = list_backup_files(&dir)?;
@@ -870,6 +907,7 @@ mod tests {
         AppState {
             db: crate::db::open_in_memory().expect("in-memory db"),
             vault_key: std::sync::Mutex::new(None),
+            degraded: None,
         }
     }
 
@@ -1196,5 +1234,42 @@ mod tests {
         assert_eq!(listed[0], dest, "backup baru harus paling atas");
 
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Regresi keamanan: nama kolom dari JSON backup TIDAK boleh jadi identifier
+    /// SQL (celah injeksi). Key tak dikenal harus dibuang; baris valid tetap masuk.
+    #[test]
+    fn backup_import_ignores_malicious_column_names() {
+        let state = test_state();
+        state
+            .db
+            .with(|conn| {
+                let row = json!({
+                    "id": "evil",
+                    "title": "Malicious",
+                    "created_at": now(),
+                    "updated_at": now(),
+                    "x TEXT); DROP TABLE activity_log; --": "boom"
+                });
+                // Sebelum perbaikan, key berbahaya masuk ke SQL → error/injeksi.
+                // Sesudah perbaikan, key di-whitelist → baris valid tetap tersimpan.
+                insert_rows(conn, "vault_items", &[row])?;
+
+                let title: String =
+                    conn.query_row("SELECT title FROM vault_items WHERE id='evil'", [], |r| {
+                        r.get(0)
+                    })?;
+                assert_eq!(title, "Malicious");
+
+                // Tabel activity_log masih ada (tidak ter-drop).
+                let exists: i64 = conn.query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='activity_log'",
+                    [],
+                    |r| r.get(0),
+                )?;
+                assert_eq!(exists, 1, "injeksi tidak boleh menjatuhkan tabel");
+                Ok(())
+            })
+            .unwrap();
     }
 }

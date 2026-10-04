@@ -10,6 +10,8 @@ interface AuthState {
   locked: boolean;
   loading: boolean;
   error: string | null;
+  /** Pesan bila backend berjalan dengan DB in-memory sementara (data tidak persisten). */
+  degraded: string | null;
   /** Derive key + decrypt DEK into backend memory. */
   unlock: (password: string) => Promise<void>;
   /** Create DEK + verifier on a fresh vault, then leave it unlocked. */
@@ -25,6 +27,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   locked: true,
   loading: false,
   error: null,
+  degraded: null,
 
   unlock: async (password) => {
     set({ loading: true, error: null });
@@ -62,7 +65,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   refreshStatus: async () => {
     try {
       const status = await api.vaultStatus();
-      set({ initialized: status.initialized, locked: status.locked });
+      set({
+        initialized: status.initialized,
+        locked: status.locked,
+        degraded: status.degraded ?? null,
+      });
     } catch (err) {
       set({ error: errorMessage(err) });
     }

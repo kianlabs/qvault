@@ -15,24 +15,35 @@ pub struct AppState {
     pub db: Db,
     /// DEK (data encryption key) di memori; `None` = vault terkunci.
     pub vault_key: Mutex<Option<Key>>,
+    /// `Some(pesan)` bila DB default gagal dibuka dan app berjalan dengan
+    /// database in-memory sementara (data TIDAK persisten). Diteruskan ke UI
+    /// lewat `vault_status` agar pengguna tidak salah sangka "data hilang".
+    pub degraded: Option<String>,
 }
 
 impl AppState {
     /// Bangun state: buka DB default lalu init schema.
     pub fn new() -> Self {
-        let db = match default_db() {
-            Ok(db) => db,
+        let (db, degraded) = match default_db() {
+            Ok(db) => (db, None),
             Err(e) => {
                 eprintln!(
-                    "[qvault] gagal membuka database default: {e}; memakai database in-memory"
+                    "[qvault] gagal membuka database default: {e}; memakai database in-memory (SEMENTARA, data tidak persisten)"
                 );
-                crate::db::open_in_memory().expect("gagal membuka database in-memory")
+                let msg = format!(
+                    "Database lokal gagal dibuka ({e}). Aplikasi berjalan dengan penyimpanan SEMENTARA — perubahan tidak akan tersimpan."
+                );
+                (
+                    crate::db::open_in_memory().expect("gagal membuka database in-memory"),
+                    Some(msg),
+                )
             }
         };
 
         Self {
             db,
             vault_key: Mutex::new(None),
+            degraded,
         }
     }
 }

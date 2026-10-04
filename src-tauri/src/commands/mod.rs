@@ -193,6 +193,7 @@ pub(crate) mod tests_support {
         AppState {
             db: crate::db::open_in_memory().expect("in-memory db"),
             vault_key: std::sync::Mutex::new(None),
+            degraded: None,
         }
     }
 }
@@ -214,6 +215,7 @@ mod tests {
         AppState {
             db: crate::db::open_in_memory().expect("in-memory db"),
             vault_key: std::sync::Mutex::new(None),
+            degraded: None,
         }
     }
 

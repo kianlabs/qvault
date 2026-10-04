@@ -42,11 +42,33 @@ impl Db {
 
 /// Buka (atau buat) database pada `path` lalu inisialisasi schema.
 pub fn open(path: impl AsRef<Path>) -> Result<Db> {
+    let path = path.as_ref();
     let conn = Connection::open(path)?;
     init_schema(&conn)?;
+    // Batasi izin file DB ke 0600 (pemilik saja). Metadata vault (title/url/tags)
+    // tidak terenkripsi, jadi file tidak boleh world-readable. Best-effort: bila
+    // gagal, catat ke stderr tapi jangan gagalkan startup.
+    if let Err(e) = restrict_permissions(path) {
+        eprintln!("[qvault] gagal membatasi izin file DB: {e}");
+    }
     Ok(Db {
         conn: Arc::new(Mutex::new(conn)),
     })
+}
+
+/// Batasi izin file ke 0600 (hanya pemilik) di Unix. No-op di platform lain.
+/// Dipakai untuk DB, backup, dan file ekspor agar tidak world-readable.
+pub fn restrict_permissions(path: impl AsRef<Path>) -> Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path.as_ref(), std::fs::Permissions::from_mode(0o600))?;
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+    }
+    Ok(())
 }
 
 /// Buka database in-memory (dipakai untuk test).

@@ -89,6 +89,7 @@ pub fn vault_status(state: State<'_, AppState>) -> Result<VaultStatus> {
         Ok(VaultStatus {
             initialized,
             locked,
+            degraded: state.degraded.clone(),
         })
     })
 }

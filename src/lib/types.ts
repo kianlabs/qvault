@@ -22,6 +22,8 @@ export type Theme = "dark" | "light" | "slate" | "nord" | "sepia";
 export interface VaultStatus {
   initialized: boolean;
   locked: boolean;
+  /** Bila ada, backend berjalan dengan DB in-memory sementara (data tidak persisten). */
+  degraded?: string;
 }
 
 // ---------------------------------------------------------------------------

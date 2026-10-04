@@ -202,6 +202,9 @@ pub struct SettingsPayload {
 pub struct VaultStatus {
     pub initialized: bool,
     pub locked: bool,
+    /// `Some(pesan)` bila backend berjalan dengan DB in-memory sementara.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub degraded: Option<String>,
 }
 
 /// Settings yang dikembalikan `get_settings`.
