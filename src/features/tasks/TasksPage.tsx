@@ -1,5 +1,5 @@
 // QVAULT — Tasks page. Uses useTasksStore (+ dashboard stats) + shared UI (Calm Precision).
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   CheckCircle2,
   Circle,
@@ -27,13 +27,13 @@ import {
   RowActions,
   SearchInput,
   StatCard,
-  Tabs,
   type Tone,
 } from "../../components/ui";
 import { useFoldersStore } from "../../store/useFoldersStore";
 import { useTasksStore } from "../../store/useTasksStore";
 import type { Task, TaskPayload, TaskStatus } from "../../lib/types";
 import { cn, formatDate, parseTags, toDateInput } from "../../lib/utils";
+import { staggerIn, useGsap } from "../../lib/motion";
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   todo: "To do",
@@ -73,6 +73,13 @@ const EMPTY_FORM: TaskPayload = {
   folderId: null,
 };
 
+/** Status sections (paritas KeepR: To Do / In Progress / Completed). */
+const GROUPS: { status: TaskStatus; label: string; dot: string }[] = [
+  { status: "todo", label: "To Do", dot: "bg-faint" },
+  { status: "in_progress", label: "In Progress", dot: "bg-info" },
+  { status: "done", label: "Completed", dot: "bg-success" },
+];
+
 export default function TasksPage() {
   const toast = useToast();
   const {
@@ -90,7 +97,6 @@ export default function TasksPage() {
   } = useTasksStore();
   const { items: folders, load: loadFolders } = useFoldersStore();
 
-  const [filter, setFilter] = useState<"all" | TaskStatus>("all");
   const [search, setSearch] = useState("");
 
   const [open, setOpen] = useState(false);
@@ -114,16 +120,27 @@ export default function TasksPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return items.filter((t) => {
-      if (filter !== "all" && t.status !== filter) return false;
-      if (!q) return true;
-      return (
+    if (!q) return items;
+    return items.filter(
+      (t) =>
         t.title.toLowerCase().includes(q) ||
         t.description.toLowerCase().includes(q) ||
-        t.tags.some((tag) => tag.toLowerCase().includes(q))
-      );
-    });
-  }, [items, filter, search]);
+        t.tags.some((tag) => tag.toLowerCase().includes(q)),
+    );
+  }, [items, search]);
+
+  // Tasks grouped by status (paritas KeepR). Urutan tetap To Do → In Progress →
+  // Completed, mengikuti GROUPS.
+  const grouped = useMemo(
+    () => GROUPS.map((g) => ({ ...g, tasks: filtered.filter((t) => t.status === g.status) })),
+    [filtered],
+  );
+
+  // Entrance motion (presentation only) — cascade the task rows on mount/filter change.
+  const listRef = useRef<HTMLDivElement>(null);
+  useGsap(() => {
+    staggerIn(listRef.current, "[data-task-group]", { y: 10, stagger: 0.05 });
+  }, [grouped]);
 
   function isOverdue(task: Task): boolean {
     if (task.status === "done" || !task.dueDate) return false;
@@ -254,16 +271,6 @@ export default function TasksPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Tabs
-          items={[
-            { value: "all", label: "All" },
-            { value: "todo", label: "To do" },
-            { value: "in_progress", label: "In progress" },
-            { value: "done", label: "Done" },
-          ]}
-          value={filter}
-          onChange={(v) => setFilter(v as "all" | TaskStatus)}
-        />
         <div className="min-w-[200px] flex-1">
           <SearchInput
             value={search}
@@ -296,99 +303,122 @@ export default function TasksPage() {
           }
         />
       ) : (
-        <Card padding="none">
-          <ul>
-            {filtered.map((task) => {
-              const StatusIcon = STATUS_ICON[task.status];
-              const overdue = isOverdue(task);
-              const done = task.status === "done";
-              return (
-                <li
-                  key={task.id}
-                  className="group flex items-center gap-3 border-b border-line px-4 py-2.5 transition-colors last:border-0 hover:bg-raised"
-                >
-                  <button
-                    type="button"
-                    onClick={() => void onCycle(task)}
-                    className={cn(
-                      "grid h-7 w-7 shrink-0 place-items-center rounded-full border transition-colors",
-                      done
-                        ? "border-success/40 bg-success-soft text-success"
-                        : "border-line text-muted hover:border-line-strong hover:text-ink",
-                    )}
-                    aria-label={`Status: ${STATUS_LABEL[task.status]}. Change status`}
-                    title={`Status: ${STATUS_LABEL[task.status]}`}
-                  >
-                    <StatusIcon className="h-3.5 w-3.5" />
-                  </button>
+        <div ref={listRef} className="space-y-6">
+          {grouped.map((group) => (
+            <section key={group.status} data-task-group className="space-y-2">
+              {/* Section header — dot status + judul + jumlah (paritas KeepR). */}
+              <div className="flex items-center gap-2.5 px-1">
+                <span className={cn("h-2 w-2 rounded-full", group.dot)} />
+                <h2 className="text-sm font-semibold tracking-tight text-ink">
+                  {group.label}
+                </h2>
+                <span className="text-xs font-medium text-faint">
+                  {group.tasks.length}
+                </span>
+              </div>
 
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p
-                        className={cn(
-                          "truncate text-sm font-medium",
-                          done ? "text-muted line-through" : "text-ink",
-                        )}
-                      >
-                        {task.title}
-                      </p>
-                      <Badge tone={priorityTone(task.priority)}>
-                        {task.priority}
-                      </Badge>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-                      {task.dueDate && (
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1",
-                            overdue && "text-danger",
-                          )}
+              {group.tasks.length === 0 ? (
+                <Card padding="md">
+                  <p className="text-xs text-muted">No tasks.</p>
+                </Card>
+              ) : (
+                <Card padding="none">
+                  <ul>
+                    {group.tasks.map((task) => {
+                      const StatusIcon = STATUS_ICON[task.status];
+                      const overdue = isOverdue(task);
+                      const done = task.status === "done";
+                      return (
+                        <li
+                          key={task.id}
+                          className="group flex items-center gap-3 border-b border-line px-4 py-2.5 transition-colors last:border-0 hover:bg-raised"
                         >
-                          {overdue ? "Overdue · " : "Due "}
-                          {formatDate(task.dueDate)}
-                        </span>
-                      )}
-                      {task.tags
-                        .filter((tag) => tag.toLowerCase() !== "task")
-                        .map((tag) => (
-                          <Badge key={tag} tone="neutral">
-                            {tag}
-                          </Badge>
-                        ))}
-                      {task.folderId && folderName.get(task.folderId) && (
-                        <span>· {folderName.get(task.folderId)}</span>
-                      )}
-                    </div>
-                  </div>
+                          <button
+                            type="button"
+                            onClick={() => void onCycle(task)}
+                            className={cn(
+                              "grid h-7 w-7 shrink-0 place-items-center rounded-full border transition-colors",
+                              done
+                                ? "border-success/40 bg-success-soft text-success"
+                                : "border-line text-muted hover:border-line-strong hover:text-ink",
+                            )}
+                            aria-label={`Status: ${STATUS_LABEL[task.status]}. Change status`}
+                            title={`Status: ${STATUS_LABEL[task.status]}`}
+                          >
+                            <StatusIcon className="h-3.5 w-3.5" />
+                          </button>
 
-                  {busyId === task.id && (
-                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted" />
-                  )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <p
+                                className={cn(
+                                  "truncate text-sm font-medium",
+                                  done ? "text-muted line-through" : "text-ink",
+                                )}
+                              >
+                                {task.title}
+                              </p>
+                              <Badge tone={priorityTone(task.priority)}>
+                                {task.priority}
+                              </Badge>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                              {task.dueDate && (
+                                <span
+                                  className={cn(
+                                    "inline-flex items-center gap-1",
+                                    overdue && "text-danger",
+                                  )}
+                                >
+                                  {overdue ? "Overdue · " : "Due "}
+                                  {formatDate(task.dueDate)}
+                                </span>
+                              )}
+                              {task.tags
+                                .filter((tag) => tag.toLowerCase() !== "task")
+                                .map((tag) => (
+                                  <Badge key={tag} tone="neutral">
+                                    {tag}
+                                  </Badge>
+                                ))}
+                              {task.folderId && folderName.get(task.folderId) && (
+                                <span>· {folderName.get(task.folderId)}</span>
+                              )}
+                            </div>
+                          </div>
 
-                  <RowActions className="shrink-0">
-                    <IconButton
-                      icon={Pencil}
-                      label="Edit task"
-                      onClick={() => openEdit(task)}
-                    />
-                    <Menu
-                      label="More actions"
-                      items={[
-                        {
-                          label: "Delete",
-                          icon: Trash2,
-                          onClick: () => void onDelete(task),
-                          danger: true,
-                          disabled: busyId === task.id,
-                        },
-                      ]}
-                    />
-                  </RowActions>
-                </li>
-              );
-            })}
-          </ul>
-        </Card>
+                          {busyId === task.id && (
+                            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted" />
+                          )}
+
+                          <RowActions className="shrink-0">
+                            <IconButton
+                              icon={Pencil}
+                              label="Edit task"
+                              onClick={() => openEdit(task)}
+                            />
+                            <Menu
+                              label="More actions"
+                              items={[
+                                {
+                                  label: "Delete",
+                                  icon: Trash2,
+                                  onClick: () => void onDelete(task),
+                                  danger: true,
+                                  disabled: busyId === task.id,
+                                },
+                              ]}
+                            />
+                          </RowActions>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </Card>
+              )}
+            </section>
+          ))}
+        </div>
       )}
 
       <Modal

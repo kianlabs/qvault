@@ -19,7 +19,7 @@ pub fn get_settings(state: State<'_, AppState>) -> Result<Settings> {
         let display_name = get_setting(conn, "display_name")?.unwrap_or_default();
         let avatar = get_setting(conn, "avatar")?;
         let theme = get_setting(conn, "theme")?.unwrap_or_else(|| "dark".to_string());
-        let accent = get_setting(conn, "accent")?.unwrap_or_else(|| "#7c5cff".to_string());
+        let accent = get_setting(conn, "accent")?.unwrap_or_else(|| "slate".to_string());
         let font_size = parse_i64(get_setting(conn, "font_size")?).unwrap_or(14);
         let auto_lock_min = parse_i64(get_setting(conn, "auto_lock_min")?).unwrap_or(15);
         let clipboard_clear_sec = parse_i64(get_setting(conn, "clipboard_clear_sec")?).unwrap_or(30);

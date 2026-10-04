@@ -1,7 +1,7 @@
 // QVAULT — Generator (route "/generator"). Fully local password generator:
 // uses generatePassword()/passwordStrength() from lib/utils. No network.
 // UI overhaul: "Calm Precision" design system (presentation only — no logic change).
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Copy,
   Minus,
@@ -15,6 +15,7 @@ import PasswordStrength from "../../components/PasswordStrength";
 import { secureCopy } from "../../lib/clipboard";
 import { useSettingsStore } from "../../store/useSettingsStore";
 import { generatePassword } from "../../lib/utils";
+import { staggerIn, useGsap } from "../../lib/motion";
 import {
   Badge,
   Button,
@@ -62,6 +63,12 @@ export default function GeneratorPage() {
   useEffect(() => {
     regenerate();
   }, [regenerate]);
+
+  // Entrance motion (presentation only) — cascade the character-set options on mount.
+  const optionsRef = useRef<HTMLUListElement>(null);
+  useGsap(() => {
+    staggerIn(optionsRef.current, ":scope > *", { y: 8, stagger: 0.03 });
+  }, []);
 
   function toggle(key: keyof Toggles) {
     setToggles((t) => ({ ...t, [key]: !t[key] }));
@@ -138,7 +145,7 @@ export default function GeneratorPage() {
           </div>
         </div>
 
-        <ul className="divide-y divide-line border-t border-line">
+        <ul ref={optionsRef} className="divide-y divide-line border-t border-line">
           {TOGGLE_DEFS.map(({ key, label }) => (
             <li key={key} className="flex items-center justify-between gap-3 py-2.5">
               <span className="text-sm text-ink">{label}</span>

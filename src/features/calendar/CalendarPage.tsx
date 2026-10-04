@@ -1,7 +1,7 @@
 // QVAULT — Calendar page. Month / Week / Year views over useTasksStore (dueDate) +
 // "add task from date" modal (Wave 3, Agent C). Shared UI from FINAL-CONTRACT B/C/D.
 // Redesigned to the "Calm Precision" design system (UI-OVERHAUL-CONTRACT) — presentation only.
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   CalendarDays,
   ChevronLeft,
@@ -29,6 +29,7 @@ import {
 import { useFoldersStore } from "../../store/useFoldersStore";
 import { useTasksStore } from "../../store/useTasksStore";
 import { exitFullscreen, isFullscreen, toggleFullscreen } from "../../lib/fullscreen";
+import { staggerIn, useGsap } from "../../lib/motion";
 import type { Task, TaskPayload, TaskStatus } from "../../lib/types";
 import { cn, parseTags } from "../../lib/utils";
 
@@ -154,6 +155,11 @@ export default function CalendarPage() {
   const [form, setForm] = useState<TaskPayload>(EMPTY_FORM);
   const [tagsText, setTagsText] = useState("");
 
+  // Entrance motion (presentation only) — one ref per view container.
+  const monthGridRef = useRef<HTMLDivElement>(null);
+  const weekGridRef = useRef<HTMLDivElement>(null);
+  const yearGridRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     void load();
     void loadFolders();
@@ -231,6 +237,20 @@ export default function CalendarPage() {
     }
     return arr;
   }, [tasksByDay, year]);
+
+  // Entrance motion (presentation only): cascade the day cells on view change and
+  // the month tiles when the year changes. Presentation only — no logic touched.
+  useGsap(() => {
+    staggerIn(monthGridRef.current, ":scope > div", { y: 6, stagger: 0.008, duration: 0.2 });
+  }, [view, cursor]);
+
+  useGsap(() => {
+    staggerIn(weekGridRef.current, ":scope > div", { y: 6, stagger: 0.02, duration: 0.2 });
+  }, [view, cursor]);
+
+  useGsap(() => {
+    staggerIn(yearGridRef.current, ":scope > button", { y: 8, stagger: 0.02 });
+  }, [year]);
 
   const headerCount =
     view === "month" ? monthCount : view === "week" ? weekCount : yearCount;
@@ -367,7 +387,7 @@ export default function CalendarPage() {
             ))}
           </div>
 
-          <div className="grid grid-cols-7">
+          <div ref={monthGridRef} className="grid grid-cols-7">
             {grid.map((date, i) => {
               const key = dayKey(date);
               const dayTasks = tasksByDay.get(key) ?? [];
@@ -446,7 +466,7 @@ export default function CalendarPage() {
             })}
           </div>
 
-          <div className="grid grid-cols-7">
+          <div ref={weekGridRef} className="grid grid-cols-7">
             {weekDays.map((d) => {
               const key = dayKey(d);
               const dayTasks = tasksByDay.get(key) ?? [];
@@ -481,7 +501,7 @@ export default function CalendarPage() {
       )}
 
       {view === "year" && (
-        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <div ref={yearGridRef} className="grid gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {MONTHS.map((name, m) => (
             <button
               key={name}

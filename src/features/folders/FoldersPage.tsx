@@ -1,5 +1,5 @@
 // QVAULT — Folders page. Uses useFoldersStore + shared UI (Calm Precision).
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   Folder as FolderIcon,
   Loader2,
@@ -31,6 +31,7 @@ import { useVaultStore } from "../../store/useVaultStore";
 import { useNotesStore } from "../../store/useNotesStore";
 import type { Folder, FolderKind, FolderPayload } from "../../lib/types";
 import { cn, formatDate } from "../../lib/utils";
+import { staggerIn, useGsap } from "../../lib/motion";
 
 const VIEW_KEY = "qvault.foldersView";
 type ViewMode = "grid" | "list";
@@ -124,6 +125,13 @@ export default function FoldersPage() {
     for (const f of items) m.set(f.id, f.name);
     return m;
   }, [items]);
+
+  // Entrance motion (presentation only) — cascade folder cards/rows on mount, filter or view change.
+  const gridRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  useGsap(() => {
+    staggerIn(gridRef.current ?? listRef.current, ":scope > *", { y: 8, stagger: 0.03 });
+  }, [filtered, view]);
 
   function openCreate() {
     setEditing(null);
@@ -251,7 +259,7 @@ export default function FoldersPage() {
           }
         />
       ) : view === "grid" ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div ref={gridRef} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {filtered.map((folder) => {
             const count = itemCount.get(folder.id) ?? 0;
             return (
@@ -325,7 +333,7 @@ export default function FoldersPage() {
         </div>
       ) : (
         <Card padding="none">
-          <ul>
+          <ul ref={listRef}>
             {filtered.map((folder) => {
               const count = itemCount.get(folder.id) ?? 0;
               return (

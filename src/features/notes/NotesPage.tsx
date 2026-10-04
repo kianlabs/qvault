@@ -1,5 +1,5 @@
 // QVAULT — Notes page. Uses useNotesStore + shared UI (Calm Precision).
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   Copy,
   FileText,
@@ -33,6 +33,7 @@ import { useNotesStore } from "../../store/useNotesStore";
 import type { Note, NotePayload } from "../../lib/types";
 import { cn, formatRelative, parseTags, truncate } from "../../lib/utils";
 import { renderMarkdown } from "../../lib/markdown";
+import { staggerIn, useGsap } from "../../lib/motion";
 
 const EMPTY_FORM: NotePayload = {
   title: "",
@@ -96,6 +97,12 @@ export default function NotesPage() {
       );
     });
   }, [items, search, favoriteOnly]);
+
+  // Entrance motion (presentation only) — cascade the note cards on mount/filter change.
+  const listRef = useRef<HTMLDivElement>(null);
+  useGsap(() => {
+    staggerIn(listRef.current, ":scope > *", { y: 8, stagger: 0.03 });
+  }, [filtered]);
 
   function openCreate() {
     setEditing(null);
@@ -237,7 +244,7 @@ export default function NotesPage() {
           }
         />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div ref={listRef} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {filtered.map((note) => (
             <Card key={note.id} padding="md" className="group flex flex-col gap-3">
               <div className="flex items-start justify-between gap-2">

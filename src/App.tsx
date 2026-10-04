@@ -26,6 +26,9 @@ import ActivityPage from "./features/activity/ActivityPage";
 import SettingsPage from "./features/settings/SettingsPage";
 import { useAuthStore } from "./store/useAuthStore";
 import { useSettingsStore } from "./store/useSettingsStore";
+import { isDarkTheme, useThemeStore } from "./store/useThemeStore";
+import { pageEnter } from "./lib/motion";
+import { DEFAULT_ACCENT, applyAccent } from "./lib/accents";
 
 /**
  * Auto-lock idle timer (Wave 4).
@@ -60,6 +63,12 @@ function Shell() {
   const location = useLocation();
   const { locked, refreshStatus } = useAuthStore();
   const { settings, load: loadSettings } = useSettingsStore();
+  const pageRef = useRef<HTMLDivElement>(null);
+
+  // Transisi halaman: konten masuk halus setiap rute berubah.
+  useEffect(() => {
+    pageEnter(pageRef.current);
+  }, [location.pathname]);
 
   useEffect(() => {
     void refreshStatus();
@@ -69,26 +78,36 @@ function Shell() {
     if (!locked) void loadSettings();
   }, [locked, loadSettings]);
 
-  const theme = settings?.theme ?? "dark";
+  const theme = useThemeStore((s) => s.theme);
+  const syncTheme = useThemeStore((s) => s.sync);
   const fontSize = settings?.fontSize ?? 16;
-  const accent = settings?.accent ?? "#7c5cff";
+  const accent = settings?.accent ?? DEFAULT_ACCENT;
   const autoLockMin = settings?.autoLockMin ?? 0;
+
+  // Sinkronkan tema dari settings backend saat pertama dimuat.
+  useEffect(() => {
+    if (settings?.theme) syncTheme(settings.theme);
+  }, [settings?.theme, syncTheme]);
 
   // Auto-lock aktif hanya saat vault terbuka.
   useAutoLock(!locked && autoLockMin > 0, autoLockMin);
 
-  // apply theme preset + font size + accent to <html>
+  // Terapkan tema ke <html>: kelas preset + varian `dark` untuk keluarga gelap.
   useEffect(() => {
     const root = document.documentElement;
     const presets = ["light", "dark", "slate", "nord", "sepia"];
-    // Hapus semua kelas preset, lalu pasang yang aktif.
     presets.forEach((p) => root.classList.remove(p));
     root.classList.add(theme);
-    // Preset keluarga gelap juga mengaktifkan varian `dark` Tailwind.
     if (theme === "slate" || theme === "nord") root.classList.add("dark");
+  }, [theme]);
+
+  // Font size + accent. Aksen diresolusi (nama preset / hex) lalu diterapkan
+  // sebagai CSS var supaya seluruh primitif UI langsung ikut berubah warna.
+  useEffect(() => {
+    const root = document.documentElement;
     root.style.fontSize = `${fontSize}px`;
-    root.style.setProperty("--accent", accent);
-  }, [theme, fontSize, accent]);
+    applyAccent(root, accent, isDarkTheme(theme));
+  }, [fontSize, accent, theme]);
 
   if (location.pathname === "/unlock") {
     return <UnlockScreen />;
@@ -103,7 +122,11 @@ function Shell() {
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />
         <main className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-[1400px] px-8 py-7">
+          <div
+            key={location.pathname}
+            ref={pageRef}
+            className="mx-auto w-full max-w-[1400px] px-8 py-7"
+          >
             <ErrorBoundary>
               <Routes>
                 <Route path="/" element={<DashboardPage />} />

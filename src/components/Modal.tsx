@@ -1,7 +1,11 @@
 // QVAULT — shared Modal (Calm Precision).
-import { type ReactNode, useEffect } from "react";
+// Animasi masuk kini lewat GSAP (bukan kelas CSS) supaya konsisten dengan
+// gerak halaman lain dan otomatis dimatikan saat reduced-motion.
+import { type ReactNode, useEffect, useRef } from "react";
 import { X } from "lucide-react";
+import gsap from "gsap";
 import { cn } from "../lib/utils";
+import { motionOK, popIn } from "../lib/motion";
 import IconButton from "./ui/IconButton";
 
 interface ModalProps {
@@ -21,6 +25,9 @@ export default function Modal({
   children,
   className,
 }: ModalProps) {
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -30,6 +37,19 @@ export default function Modal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  // Animasi masuk: overlay fade + panel naik halus.
+  useEffect(() => {
+    if (!open || !motionOK) return;
+    const tl = gsap.timeline();
+    if (overlayRef.current) {
+      tl.fromTo(overlayRef.current, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.18 });
+    }
+    popIn(panelRef.current);
+    return () => {
+      tl.kill();
+    };
+  }, [open]);
+
   if (!open) return null;
 
   return (
@@ -37,10 +57,11 @@ export default function Modal({
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       onMouseDown={onClose}
     >
-      <div className="qv-fade absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div ref={overlayRef} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
+        ref={panelRef}
         className={cn(
-          "qv-pop relative z-10 max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-line bg-elevated p-5 shadow-2xl",
+          "relative z-10 max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-line bg-elevated p-5 shadow-2xl",
           className,
         )}
         onMouseDown={(e) => e.stopPropagation()}

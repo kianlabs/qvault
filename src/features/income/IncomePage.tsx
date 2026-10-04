@@ -1,6 +1,6 @@
 // QVAULT — Income page. Uses useIncomeStore (+ income_summary) + shared UI (FINAL-CONTRACT B/C/D).
 // Redesigned to the "Calm Precision" design system (UI-OVERHAUL-CONTRACT) — presentation only.
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   Coins,
   Loader2,
@@ -28,6 +28,7 @@ import {
   StatCard,
 } from "../../components/ui";
 import { useIncomeStore } from "../../store/useIncomeStore";
+import { staggerIn, useGsap } from "../../lib/motion";
 import type { Income, IncomePayload } from "../../lib/types";
 import { cn, formatCurrency, formatDate, toDateInput } from "../../lib/utils";
 
@@ -79,6 +80,10 @@ export default function IncomePage() {
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  // Entrance motion (presentation only) — refs for the stat grid and the list.
+  const statsRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+
   useEffect(() => {
     void load();
     void loadSummary();
@@ -99,6 +104,16 @@ export default function IncomePage() {
     if (!summary || summary.byMonth.length === 0) return 0;
     return Math.max(...summary.byMonth.map((m) => m.total), 0);
   }, [summary]);
+
+  // Entrance motion (presentation only): stat cards cascade once on mount; the
+  // list re-cascades when the filtered set changes (load / search). No logic touched.
+  useGsap(() => {
+    staggerIn(statsRef.current, ":scope > *", { y: 8, stagger: 0.05 });
+  }, []);
+
+  useGsap(() => {
+    staggerIn(listRef.current, ":scope > li", { y: 6, stagger: 0.02, duration: 0.2 });
+  }, [filtered]);
 
   function openCreate() {
     setEditing(null);
@@ -197,6 +212,7 @@ export default function IncomePage() {
       />
 
       <div
+        ref={statsRef}
         className={cn(
           "grid gap-4 sm:grid-cols-2",
           summaryLoading && "opacity-60 transition-opacity",
@@ -249,7 +265,7 @@ export default function IncomePage() {
         />
       ) : (
         <Card padding="none" className="overflow-hidden">
-          <ul>
+          <ul ref={listRef}>
             {filtered.map((entry) => (
               <li
                 key={entry.id}

@@ -15,11 +15,13 @@ import {
   Info,
   KeyRound,
   Loader2,
+  Moon,
   Palette,
   Plus,
   RefreshCw,
   Save,
   ShieldCheck,
+  Sun,
   Trash2,
   Upload,
   User,
@@ -46,17 +48,23 @@ import {
   Toggle,
 } from "../../components/ui";
 import { cn, errorMessage } from "../../lib/utils";
+import { staggerIn, useGsap } from "../../lib/motion";
+import { ACCENTS, DEFAULT_ACCENT } from "../../lib/accents";
 import type { BrowserKind, CsvKind, Theme } from "../../lib/types";
+import { useThemeStore } from "../../store/useThemeStore";
 
-const ACCENTS = ["#7c5cff", "#22d3ee", "#34d399", "#f472b6", "#f59e0b"];
+/** Preset tema tambahan (di luar Light/Dark) — tetap tersedia, disajikan ringkas. */
+const THEME_PRESETS: { id: Theme; label: string; swatch: string }[] = [
+  { id: "slate", label: "Slate", swatch: "#0b1220" },
+  { id: "nord", label: "Nord", swatch: "#2e3440" },
+  { id: "sepia", label: "Sepia", swatch: "#f7f0e0" },
+];
 
-/** Wave 5 — preset tema bernama + warna swatch untuk preview. */
-const THEMES: { id: Theme; label: string; swatch: string }[] = [
-  { id: "dark", label: "Dark", swatch: "#12151c" },
-  { id: "light", label: "Light", swatch: "#ffffff" },
-  { id: "slate", label: "Slate", swatch: "#16223a" },
-  { id: "nord", label: "Nord", swatch: "#363d4b" },
-  { id: "sepia", label: "Sepia", swatch: "#fdf8ec" },
+/** Ukuran font (paritas KeepR: Small / Medium / Large). */
+const FONT_SIZES: { id: string; label: string; px: number }[] = [
+  { id: "small", label: "Small", px: 13 },
+  { id: "medium", label: "Medium", px: 15 },
+  { id: "large", label: "Large", px: 18 },
 ];
 
 const CSV_KINDS: { value: CsvKind; label: string }[] = [
@@ -85,8 +93,12 @@ export default function SettingsPage() {
 
   const [displayName, setDisplayName] = useState("");
   const [avatar, setAvatar] = useState("");
-  const [theme, setTheme] = useState<Theme>("dark");
-  const [accent, setAccent] = useState("#7c5cff");
+  // Tema dikelola store global agar tombol toggle di Topbar & grid di sini
+  // selalu sinkron. Persistensi ditangani store (optimistic + backend).
+  const theme = useThemeStore((s) => s.theme);
+  const setTheme = useThemeStore((s) => s.setTheme);
+  const syncTheme = useThemeStore((s) => s.sync);
+  const [accent, setAccent] = useState<string>(DEFAULT_ACCENT);
   const [fontSize, setFontSize] = useState(16);
   // Wave 5 — tampilkan favicon situs di daftar vault (default true).
   const [showIcons, setShowIcons] = useState(true);
@@ -120,6 +132,12 @@ export default function SettingsPage() {
   const [resetCode, setResetCode] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // Entrance motion (presentation only): cascade the section stack on mount.
+  const stackRef = useRef<HTMLDivElement>(null);
+  useGsap(() => {
+    staggerIn(stackRef.current, ":scope > *", { y: 8, stagger: 0.03 });
+  }, []);
+
   useEffect(() => {
     void load();
     void loadTemplates();
@@ -129,13 +147,13 @@ export default function SettingsPage() {
     if (!settings) return;
     setDisplayName(settings.displayName);
     setAvatar(settings.avatar ?? "");
-    setTheme(settings.theme);
+    syncTheme(settings.theme);
     setAccent(settings.accent);
     setFontSize(settings.fontSize);
     setShowIcons(settings.showIcons);
     setAutoLockMin(settings.autoLockMin);
     setClipboardClearSec(settings.clipboardClearSec);
-  }, [settings]);
+  }, [settings, syncTheme]);
 
   async function persist(payload: Parameters<typeof update>[0], ok: string) {
     setSaving(true);
@@ -162,11 +180,11 @@ export default function SettingsPage() {
       return;
     }
     const id = window.setTimeout(() => {
-      void persist({ theme, accent, fontSize, showIcons }, "Appearance saved");
+      void persist({ accent, fontSize, showIcons }, "Appearance saved");
     }, 600);
     return () => window.clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [theme, accent, fontSize, showIcons]);
+  }, [accent, fontSize, showIcons]);
 
   async function onChangePassword(e: FormEvent) {
     e.preventDefault();
@@ -371,7 +389,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div ref={stackRef} className="space-y-6">
       <PageHeader
         title="Settings"
         subtitle="Preferences are stored locally and applied immediately."
@@ -409,91 +427,145 @@ export default function SettingsPage() {
         title="Appearance"
         hint="Applied immediately"
       >
+        {/* Theme — Light / Dark segmented (paritas KeepR). */}
         <Field label="Theme">
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
-            {THEMES.map((t) => (
+          <div className="inline-flex rounded-xl border border-line bg-surface p-1">
+            {(["light", "dark"] as const).map((id) => {
+              const active = theme === id;
+              const Icon = id === "light" ? Sun : Moon;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setTheme(id)}
+                  aria-pressed={active}
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-lg px-4 py-1.5 text-sm font-medium transition-colors duration-150",
+                    active
+                      ? "bg-accent text-accent-fg"
+                      : "text-muted hover:text-ink",
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {id === "light" ? "Light" : "Dark"}
+                </button>
+              );
+            })}
+          </div>
+        </Field>
+
+        {/* Extra presets — tetap tersedia bagi yang ingin nuansa lain. */}
+        <Field label="Theme presets">
+          <div className="flex flex-wrap gap-2">
+            {THEME_PRESETS.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setTheme(t.id)}
                 aria-pressed={theme === t.id}
                 className={cn(
-                  "flex flex-col items-stretch gap-2 rounded-xl border p-1.5 text-left transition-colors duration-150",
+                  "inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors duration-150",
                   theme === t.id
-                    ? "border-accent bg-accent-soft"
-                    : "border-line hover:border-line-strong",
+                    ? "border-accent bg-accent-soft text-ink"
+                    : "border-line text-muted hover:border-line-strong hover:text-ink",
                 )}
               >
                 <span
                   aria-hidden
-                  className="h-12 w-full rounded-lg border border-line"
+                  className="h-3.5 w-3.5 rounded-full border border-line"
                   style={{ backgroundColor: t.swatch }}
                 />
-                <span
-                  className={cn(
-                    "px-0.5 pb-0.5 text-xs font-medium",
-                    theme === t.id ? "text-ink" : "text-muted",
-                  )}
-                >
-                  {t.label}
-                </span>
+                {t.label}
               </button>
             ))}
           </div>
         </Field>
 
+        {/* Accent colour — enam aksen bernama (paritas KeepR). */}
         <Field label="Accent colour">
-          <div className="flex flex-wrap items-center gap-2">
-            {ACCENTS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setAccent(c)}
-                aria-label={`Accent ${c}`}
-                aria-pressed={accent.toLowerCase() === c.toLowerCase()}
-                style={{ backgroundColor: c }}
-                className={cn(
-                  "h-8 w-8 rounded-lg border-2 transition-colors duration-150",
-                  accent.toLowerCase() === c.toLowerCase()
-                    ? "border-ink"
-                    : "border-transparent",
-                )}
-              />
-            ))}
-            <input
-              type="color"
-              value={accent}
-              onChange={(e) => setAccent(e.target.value)}
-              aria-label="Custom accent colour"
-              className="h-8 w-10 cursor-pointer rounded-lg border border-line bg-surface"
-            />
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {ACCENTS.map((a) => {
+              const active = accent === a.id;
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  onClick={() => setAccent(a.id)}
+                  aria-pressed={active}
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors duration-150",
+                    active
+                      ? "border-accent bg-accent-soft text-ink"
+                      : "border-line text-muted hover:border-line-strong hover:text-ink",
+                  )}
+                >
+                  <span
+                    aria-hidden
+                    className="h-3.5 w-3.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: a.light }}
+                  />
+                  {a.label}
+                </button>
+              );
+            })}
           </div>
         </Field>
 
-        <Field label={`Font size — ${fontSize}px`}>
-          <input
-            type="range"
-            min={12}
-            max={20}
-            value={fontSize}
-            onChange={(e) => setFontSize(Number(e.target.value))}
-            className="h-1.5 w-full cursor-pointer accent-[var(--accent)]"
-          />
+        {/* Font size — Small / Medium / Large segmented (paritas KeepR). */}
+        <Field label="Font size">
+          <div className="inline-flex rounded-xl border border-line bg-surface p-1">
+            {FONT_SIZES.map((f) => {
+              const active = fontSize === f.px;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setFontSize(f.px)}
+                  aria-pressed={active}
+                  className={cn(
+                    "rounded-lg px-4 py-1.5 text-sm font-medium transition-colors duration-150",
+                    active
+                      ? "bg-accent text-accent-fg"
+                      : "text-muted hover:text-ink",
+                  )}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
         </Field>
 
-        {/* Wave 5 — toggle ikon situs (favicon) di daftar vault. */}
-        <div className="flex items-start justify-between gap-3">
-          <div>
+        {/* Website icons — On / Off segmented (paritas KeepR). */}
+        <div className="flex items-start justify-between gap-4 border-t border-line pt-4">
+          <div className="min-w-0">
             <p className="text-sm font-medium text-ink">Website icons</p>
-            <p className="text-xs text-muted">
-              Show each site&apos;s favicon in the vault list.
+            <p className="mt-0.5 text-xs text-muted">
+              Fetches site icons from DuckDuckGo. Domains may be sent, but never
+              usernames or passwords. Turn off for full offline privacy.
             </p>
           </div>
-          <Toggle
-            checked={showIcons}
-            onChange={setShowIcons}
-            label="Show website icons"
-          />
+          <div className="inline-flex shrink-0 rounded-xl border border-line bg-surface p-1">
+            {([true, false] as const).map((on) => {
+              const active = showIcons === on;
+              return (
+                <button
+                  key={String(on)}
+                  type="button"
+                  onClick={() => setShowIcons(on)}
+                  aria-pressed={active}
+                  className={cn(
+                    "rounded-lg px-4 py-1.5 text-sm font-medium transition-colors duration-150",
+                    active
+                      ? "bg-accent text-accent-fg"
+                      : "text-muted hover:text-ink",
+                  )}
+                >
+                  {on ? "On" : "Off"}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </Section>
 

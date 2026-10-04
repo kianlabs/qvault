@@ -1,6 +1,6 @@
 // QVAULT — Vault (passwords) page. Uses useVaultStore + Calm Precision UI.
 // Lapisan tampilan saja: seluruh state/handler/store dipertahankan identik.
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   Copy,
   Eye,
@@ -34,6 +34,7 @@ import {
   type MenuItem,
 } from "../../components/ui";
 import { secureCopy } from "../../lib/clipboard";
+import { staggerIn, useGsap } from "../../lib/motion";
 import { useFoldersStore } from "../../store/useFoldersStore";
 import { useSettingsStore } from "../../store/useSettingsStore";
 import { useVaultStore } from "../../store/useVaultStore";
@@ -197,6 +198,15 @@ export default function VaultPage() {
       );
     });
   }, [items, search, favoriteOnly, folderId]);
+
+  // Entrance motion (presentation only): the vault grid/list items cascade in.
+  // Grid: cards are direct children. List: rows sit inside the Card wrapper.
+  // Re-runs when the visible set or view mode changes; no state is touched.
+  const listRef = useRef<HTMLDivElement>(null);
+  useGsap(() => {
+    const selector = view === "grid" ? ":scope > *" : ":scope > * > *";
+    staggerIn(listRef.current, selector, { y: 8, stagger: 0.03 });
+  }, [filtered, view]);
 
   function openCreate() {
     setEditing(null);
@@ -421,7 +431,10 @@ export default function VaultPage() {
           }
         />
       ) : view === "grid" ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div
+          ref={listRef}
+          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+        >
           {filtered.map((item) => {
             const shown = revealed[item.id];
             return (
@@ -486,65 +499,67 @@ export default function VaultPage() {
           })}
         </div>
       ) : (
-        <Card padding="none" className="overflow-hidden">
-          {filtered.map((item) => {
-            const shown = revealed[item.id];
-            return (
-              <div
-                key={item.id}
-                className="group flex items-center gap-3 border-b border-line px-4 py-2.5 transition-colors last:border-0 hover:bg-raised"
-              >
-                <VaultAvatar
-                  item={item}
-                  showIcons={showIcons}
-                  broken={brokenIcons[item.id]}
-                  onIconError={() =>
-                    setBrokenIcons((b) => ({ ...b, [item.id]: true }))
-                  }
-                />
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-medium text-ink">
-                      {item.title}
-                    </p>
-                    {item.favorite && (
-                      <Star
-                        className="h-3.5 w-3.5 shrink-0 fill-current text-warn"
-                        aria-hidden
-                      />
-                    )}
-                  </div>
-                  <p className="truncate text-xs text-muted">
-                    {item.username || "—"}
-                    {item.url ? ` · ${hostnameFromUrl(item.url)}` : ""}
-                    {item.folderId && folderName.get(item.folderId)
-                      ? ` · ${folderName.get(item.folderId)}`
-                      : ""}
-                  </p>
-                </div>
-
-                <div className="hidden shrink-0 text-right md:block">
-                  <p className="text-xs text-muted">
-                    {formatDate(item.updatedAt)}
-                  </p>
-                  <p className="font-mono text-xs text-ink">
-                    {shown ? shown : "••••••••"}
-                  </p>
-                </div>
-
-                <RowActions>
-                  <IconButton
-                    icon={KeyRound}
-                    label="Copy password"
-                    onClick={() => void onCopyPassword(item)}
+        <div ref={listRef}>
+          <Card padding="none" className="overflow-hidden">
+            {filtered.map((item) => {
+              const shown = revealed[item.id];
+              return (
+                <div
+                  key={item.id}
+                  className="group flex items-center gap-3 border-b border-line px-4 py-2.5 transition-colors last:border-0 hover:bg-raised"
+                >
+                  <VaultAvatar
+                    item={item}
+                    showIcons={showIcons}
+                    broken={brokenIcons[item.id]}
+                    onIconError={() =>
+                      setBrokenIcons((b) => ({ ...b, [item.id]: true }))
+                    }
                   />
-                  <Menu items={rowMenu(item, shown)} label="Item actions" />
-                </RowActions>
-              </div>
-            );
-          })}
-        </Card>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-medium text-ink">
+                        {item.title}
+                      </p>
+                      {item.favorite && (
+                        <Star
+                          className="h-3.5 w-3.5 shrink-0 fill-current text-warn"
+                          aria-hidden
+                        />
+                      )}
+                    </div>
+                    <p className="truncate text-xs text-muted">
+                      {item.username || "—"}
+                      {item.url ? ` · ${hostnameFromUrl(item.url)}` : ""}
+                      {item.folderId && folderName.get(item.folderId)
+                        ? ` · ${folderName.get(item.folderId)}`
+                        : ""}
+                    </p>
+                  </div>
+
+                  <div className="hidden shrink-0 text-right md:block">
+                    <p className="text-xs text-muted">
+                      {formatDate(item.updatedAt)}
+                    </p>
+                    <p className="font-mono text-xs text-ink">
+                      {shown ? shown : "••••••••"}
+                    </p>
+                  </div>
+
+                  <RowActions>
+                    <IconButton
+                      icon={KeyRound}
+                      label="Copy password"
+                      onClick={() => void onCopyPassword(item)}
+                    />
+                    <Menu items={rowMenu(item, shown)} label="Item actions" />
+                  </RowActions>
+                </div>
+              );
+            })}
+          </Card>
+        </div>
       )}
 
       <Modal

@@ -1,7 +1,7 @@
 // QVAULT — Favorites (route "/favorites"). Aggregates favorites across the
 // three favoritable stores: vault items, notes and folders.
 // UI overhaul: "Calm Precision" design system (presentation only — no logic change).
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight, FolderTree, KeyRound, NotebookPen, Star } from "lucide-react";
 import { useVaultStore } from "../../store/useVaultStore";
@@ -10,6 +10,7 @@ import { useFoldersStore } from "../../store/useFoldersStore";
 import { useToast } from "../../components/Toast";
 import { formatRelative } from "../../lib/utils";
 import { Card, IconButton, PageHeader, RowActions, Tabs } from "../../components/ui";
+import { staggerIn, useGsap } from "../../lib/motion";
 import EmptyState from "../../components/EmptyState";
 import type { LucideIcon } from "lucide-react";
 
@@ -51,6 +52,12 @@ export default function FavoritesPage() {
   const visibleFolders = showFolders ? favFolders : [];
 
   const total = favVault.length + favNotes.length + visibleFolders.length;
+
+  // Entrance motion (presentation only) — cascade the favorite sections on mount or tab change.
+  const listRef = useRef<HTMLDivElement>(null);
+  useGsap(() => {
+    staggerIn(listRef.current, ":scope > *", { y: 8, stagger: 0.03 });
+  }, [tab, total]);
 
   async function unfavoriteVault(id: string) {
     try {
@@ -97,7 +104,7 @@ export default function FavoritesPage() {
           hint="Star a vault item, note or folder to pin it here."
         />
       ) : (
-        <div className="space-y-6">
+        <div ref={listRef} className="space-y-6">
           {favVault.length > 0 && (
             <Section title="Vault items" icon={KeyRound} to="/vault">
               {favVault.map((item) => (

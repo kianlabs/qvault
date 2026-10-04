@@ -26,4 +26,32 @@ export default defineConfig(() => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+
+  build: {
+    // WebView2/WKWebView modern: aman target ES2021, hindari transpile berlebih.
+    target: "es2021",
+    // Matikan sourcemap di produksi (bundel lebih ramping; debug via dev).
+    sourcemap: false,
+    // Peringatan chunk besar dinaikkan — kita memang memisah vendor.
+    chunkSizeWarningLimit: 700,
+    rollupOptions: {
+      output: {
+        // Pisahkan vendor besar agar cache jangka panjang & muat paralel.
+        // (Vite 8/rolldown memakai bentuk fungsi.)
+        manualChunks(id: string) {
+          if (id.includes("node_modules")) {
+            if (id.includes("gsap")) return "motion";
+            if (
+              id.includes("react-dom") ||
+              id.includes("react-router") ||
+              id.includes("/react/")
+            ) {
+              return "react";
+            }
+          }
+          return undefined;
+        },
+      },
+    },
+  },
 }));

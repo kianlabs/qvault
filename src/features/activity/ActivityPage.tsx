@@ -1,7 +1,7 @@
 // QVAULT — Activity (route "/activity"). Timeline from useActivityStore with
 // module filtering and a confirm-gated clear.
 // UI overhaul: "Calm Precision" design system (presentation only — no logic change).
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity as ActivityIcon,
   CheckCircle2,
@@ -29,6 +29,7 @@ import {
 } from "../../components/ui";
 import type { ActivityEntry } from "../../lib/types";
 import type { LucideIcon } from "lucide-react";
+import { staggerIn, useGsap } from "../../lib/motion";
 
 const MODULE_ICONS: Record<string, LucideIcon> = {
   security: ShieldCheck,
@@ -81,6 +82,12 @@ export default function ActivityPage() {
     () => (module === "all" ? items : items.filter((e) => e.module === module)),
     [items, module],
   );
+
+  // Entrance motion (presentation only) — cascade timeline rows on mount/filter change.
+  const listRef = useRef<HTMLUListElement>(null);
+  useGsap(() => {
+    staggerIn(listRef.current, ":scope > *", { y: 8, stagger: 0.03 });
+  }, [filtered]);
 
   const tabs = useMemo(
     () => [
@@ -144,7 +151,7 @@ export default function ActivityPage() {
         />
       ) : (
         <Card padding="none">
-          <ul>
+          <ul ref={listRef}>
             {filtered.map((entry) => (
               <TimelineRow key={entry.id} entry={entry} />
             ))}

@@ -2,7 +2,7 @@
 // useTasksStore (dashboard_stats), useIncomeStore (income_summary), useActivityStore.
 // Wave 3 (Agent C): World clock, Vault protection, Recent credentials.
 // UI overhaul: "Calm Precision" design system (presentation only — no logic change).
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Activity as ActivityIcon,
@@ -48,6 +48,7 @@ import {
 import EmptyState from "../../components/EmptyState";
 import WorldClock from "../../components/WorldClock";
 import { exitFullscreen, isFullscreen, toggleFullscreen } from "../../lib/fullscreen";
+import { staggerIn, useGsap } from "../../lib/motion";
 import type { LucideIcon } from "lucide-react";
 
 interface Tile {
@@ -102,6 +103,21 @@ export default function DashboardPage() {
   useEffect(() => {
     void isFullscreen().then(setFs);
   }, []);
+
+  // Entrance motion (presentation only). Each ref marks a container; its
+  // children cascade in. No logic/state is touched.
+  const tilesRef = useRef<HTMLElement>(null);
+  const credentialsRef = useRef<HTMLUListElement>(null);
+  const upcomingRef = useRef<HTMLUListElement>(null);
+  const activityRef = useRef<HTMLUListElement>(null);
+
+  useGsap(() => {
+    staggerIn(tilesRef.current, ":scope > *", { y: 10, stagger: 0.04 });
+  }, []);
+
+  useGsap(() => {
+    staggerIn(activityRef.current, ":scope > *", { y: 8, stagger: 0.03 });
+  }, [activity]);
 
   // Escape keluar dari fullscreen — cuma dipasang saat fullscreen aktif.
   useEffect(() => {
@@ -176,6 +192,15 @@ export default function DashboardPage() {
     [vaultItems],
   );
 
+  // Cascade the recent-credentials and upcoming-task rows when they change.
+  useGsap(() => {
+    staggerIn(credentialsRef.current, ":scope > *", { y: 8, stagger: 0.035 });
+  }, [recentCredentials]);
+
+  useGsap(() => {
+    staggerIn(upcomingRef.current, ":scope > *", { y: 8, stagger: 0.035 });
+  }, [stats?.upcomingTasks]);
+
   const statusLabel = !initialized ? "Not set up" : locked ? "Locked" : "Unlocked";
   const statusTone: Tone = !initialized ? "neutral" : locked ? "warn" : "success";
 
@@ -202,7 +227,10 @@ export default function DashboardPage() {
         }
       />
 
-      <section className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+      <section
+        ref={tilesRef}
+        className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6"
+      >
         {tiles.map(({ label, value, icon, tone, to }) => (
           <StatCard
             key={label}
@@ -274,7 +302,7 @@ export default function DashboardPage() {
             />
           </div>
         ) : (
-          <ul>
+          <ul ref={credentialsRef}>
             {recentCredentials.map((item) => (
               <li key={item.id} className="border-b border-line last:border-0">
                 <button
@@ -322,7 +350,7 @@ export default function DashboardPage() {
               />
             </div>
           ) : (
-            <ul>
+            <ul ref={upcomingRef}>
               {upcoming.map((task) => (
                 <li
                   key={task.id}
@@ -365,7 +393,7 @@ export default function DashboardPage() {
               />
             </div>
           ) : (
-            <ul>
+            <ul ref={activityRef}>
               {activity.map((entry) => {
                 const Icon = ACTIVITY_ICONS[entry.module] ?? ActivityIcon;
                 return (

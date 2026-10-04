@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { buildIndex, searchIndex, type SearchHit } from "../lib/search";
+import { motionOK, popIn, staggerIn } from "../lib/motion";
 import { cn } from "../lib/utils";
 import { OPEN_PALETTE_EVENT } from "./Topbar";
 
@@ -34,6 +35,7 @@ export default function CommandPalette() {
 
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // Rebuild indeks tiap kali dibuka (baca state store saat itu juga).
   const index = useMemo(() => (open ? buildIndex() : []), [open]);
@@ -69,12 +71,18 @@ export default function CommandPalette() {
     };
   }, []);
 
-  // Autofocus + reset query saat dibuka.
+  // Autofocus + reset query saat dibuka, lalu animasikan panel masuk.
   useEffect(() => {
     if (open) {
       setQuery("");
       // fokus setelah portal ter-render.
       requestAnimationFrame(() => inputRef.current?.focus());
+      if (motionOK) {
+        popIn(panelRef.current);
+        if (listRef.current) {
+          staggerIn(listRef.current, ":scope > li", { y: 6, stagger: 0.02, duration: 0.2 });
+        }
+      }
     }
   }, [open]);
 
@@ -121,6 +129,7 @@ export default function CommandPalette() {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
       <div
+        ref={panelRef}
         className="relative z-10 w-full max-w-xl overflow-hidden rounded-2xl border border-line bg-elevated shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >

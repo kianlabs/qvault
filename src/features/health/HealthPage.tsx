@@ -2,11 +2,12 @@
 // Analisis kekuatan password dari data vault yang SUDAH didekripsi (useVaultStore.items).
 // Tidak butuh backend: semua hitungan dilakukan lokal dari item.password/username/title/updatedAt/url.
 // UI bahasa Inggris, komentar bahasa Indonesia. Lapisan tampilan saja — logika identik.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Copy, KeyRound, Lock, RefreshCw, ShieldAlert } from "lucide-react";
 import { useVaultStore } from "../../store/useVaultStore";
 import { cn, formatDate, parseDate, passwordStrength } from "../../lib/utils";
+import { staggerIn, useGsap } from "../../lib/motion";
 import EmptyState from "../../components/EmptyState";
 import {
   Button,
@@ -127,6 +128,17 @@ export default function HealthPage() {
   const report = useMemo(() => analyze(items), [items]);
   const [tab, setTab] = useState<TabKey>("weak");
 
+  // Entrance motion (presentation only): cascade the summary grid on mount and
+  // re-cascade the problem list whenever the active filter (tab) changes.
+  const statsRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  useGsap(() => {
+    staggerIn(statsRef.current, ":scope > *", { y: 8, stagger: 0.05 });
+  }, []);
+  useGsap(() => {
+    staggerIn(listRef.current, ":scope > *", { y: 8, stagger: 0.03 });
+  }, [tab]);
+
   const tone = scoreTone(report.score);
 
   // Daftar item untuk tab aktif + teks detail per kategori.
@@ -234,7 +246,7 @@ export default function HealthPage() {
               </p>
             </Card>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div ref={statsRef} className="grid grid-cols-2 gap-4">
               {stats.map(({ label, value, icon, tone: t }) => (
                 <StatCard
                   key={label}
@@ -273,7 +285,7 @@ export default function HealthPage() {
                 hint="No items in this category. Nice work."
               />
             ) : (
-              <div className="-mx-5 -mb-5">
+              <div ref={listRef} className="-mx-5 -mb-5">
                 {activeList.map((item) => (
                   <div
                     key={item.id}
