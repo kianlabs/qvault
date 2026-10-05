@@ -150,24 +150,33 @@ export default function HealthPage() {
   const [breachBusy, setBreachBusy] = useState(false);
   const [breachError, setBreachError] = useState<string | null>(null);
   const [breachDone, setBreachDone] = useState(false);
+  /** Berapa password yang GAGAL dicek (jaringan/hash) — belum terverifikasi. */
+  const [breachFailed, setBreachFailed] = useState(0);
+  /** Berapa password yang dicoba dicek pada run terakhir. */
+  const [breachScanned, setBreachScanned] = useState(0);
 
   async function runBreachCheck() {
     setBreachBusy(true);
     setBreachError(null);
     try {
       const withPw = items.filter((it) => it.password);
-      const counts = await breachCounts(withPw.map((it) => it.password));
+      const { counts, failed } = await breachCounts(
+        withPw.map((it) => it.password),
+      );
       const byId = new Map<string, number>();
       withPw.forEach((it, i) => {
         const n = counts.get(i);
         if (n && n > 0) byId.set(it.id, n);
       });
       setBreachCountsMap(byId);
+      setBreachFailed(failed.length);
+      setBreachScanned(withPw.length);
       setBreachDone(true);
     } catch (err) {
       setBreachError(
         err instanceof Error ? err.message : "Could not reach the breach service",
       );
+      setBreachDone(false);
     } finally {
       setBreachBusy(false);
     }
@@ -277,14 +286,20 @@ export default function HealthPage() {
             "rounded-xl border px-4 py-2 text-xs",
             breachedItems.length > 0
               ? "border-danger/30 bg-danger-soft text-danger"
-              : "border-success/30 bg-success-soft text-success",
+              : breachFailed > 0
+                ? "border-warn/30 bg-warn-soft text-warn"
+                : "border-success/30 bg-success-soft text-success",
           )}
         >
           {breachedItems.length > 0
             ? `${breachedItems.length} password${
                 breachedItems.length === 1 ? "" : "s"
               } found in known breaches — see the “Breached” tab.`
-            : "No passwords found in known breaches. Nice work."}
+            : breachFailed > 0
+              ? `${breachFailed} of ${breachScanned} password${
+                  breachScanned === 1 ? "" : "s"
+                } could not be checked (network). Re-run the check before trusting a clean result.`
+              : "No passwords found in known breaches. Nice work."}
         </div>
       )}
 
@@ -358,7 +373,8 @@ export default function HealthPage() {
                   items={TABS.map((t) => ({
                     value: t.key,
                     label: t.label,
-                    count: counts[t.key],
+                    // Tab Breached: jangan tampilkan "0" sebelum dicek (menyesatkan).
+                    count: t.key === "breached" && !breachDone ? undefined : counts[t.key],
                   }))}
                   value={tab}
                   onChange={(v) => setTab(v as TabKey)}
@@ -368,11 +384,35 @@ export default function HealthPage() {
 
             <p className="mb-4 text-xs text-muted">{activeDef.hint}</p>
 
-            {activeList.length === 0 ? (
+            {activeDef.key === "breached" && !breachDone ? (
+              <EmptyState
+                icon={ShieldX}
+                title="Not checked yet"
+                hint="Run the breach check to see which passwords appear in known data breaches. Only a 5-character hash prefix ever leaves your device."
+                action={
+                  <Button
+                    variant="primary"
+                    icon={breachBusy ? Loader2 : ShieldX}
+                    onClick={() => void runBreachCheck()}
+                    disabled={breachBusy}
+                  >
+                    {breachBusy ? "Checking…" : "Check breaches"}
+                  </Button>
+                }
+              />
+            ) : activeList.length === 0 ? (
               <EmptyState
                 icon={activeDef.key === "no2fa" ? Lock : KeyRound}
                 title="Nothing here"
-                hint="No items in this category. Nice work."
+                hint={
+                  activeDef.key === "breached"
+                    ? breachFailed > 0
+                      ? `${breachFailed} password${
+                          breachFailed === 1 ? "" : "s"
+                        } could not be checked — this list is incomplete. Re-run the check.`
+                      : "No passwords were found in known breaches. Nice work."
+                    : "No items in this category. Nice work."
+                }
               />
             ) : (
               <div ref={listRef} className="-mx-5 -mb-5">

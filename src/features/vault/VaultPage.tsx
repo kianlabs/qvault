@@ -70,6 +70,7 @@ function readView(): ViewMode {
   }
 }
 
+
 const EMPTY_FORM: VaultItemPayload = {
   title: "",
   username: "",
@@ -419,11 +420,12 @@ export default function VaultPage() {
       return;
     try {
       const displaced = await restoreHistory(historyItem.id, entry.id);
-      // Entri yang dipulihkan hilang; entri baru (password lama saat ini) masuk paling atas.
-      setHistory((h) => [
-        displaced,
-        ...h.filter((e) => e.id !== entry.id),
-      ]);
+      // Entri yang dipulihkan hilang; entri baru (password lama saat ini) masuk
+      // paling atas — HANYA bila benar-benar ada password yang diarsipkan.
+      setHistory((h) => {
+        const rest = h.filter((e) => e.id !== entry.id);
+        return displaced ? [displaced, ...rest] : rest;
+      });
       toast.success("Password restored");
     } catch {
       toast.error("Could not restore password");
@@ -438,6 +440,11 @@ export default function VaultPage() {
   async function onMergeGroup(group: VaultItem[]) {
     const [primary, ...rest] = group;
     if (!primary || rest.length === 0) return;
+    // Cegah kehilangan secret 2FA: hanya TOTP primary yang bertahan.
+    if (rest.some((it) => it.hasTotp)) {
+      toast.error("2FA secret on a duplicate — resolve manually before merging");
+      return;
+    }
     if (
       !window.confirm(
         `Merge ${rest.length} duplicate(s) into "${primary.title}"? The other item(s) will be deleted.`,
@@ -895,55 +902,67 @@ export default function VaultPage() {
           />
         ) : (
           <ul className="space-y-3">
-            {duplicateGroups.map((group) => (
-              <li
-                key={group[0].id}
-                className="rounded-xl border border-line bg-raised p-3"
-              >
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-ink">
-                      {group[0].title}
-                    </p>
-                    <p className="text-[11px] text-muted">
-                      {group.length} items · keep “{group[0].title}”
-                    </p>
-                  </div>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    icon={Combine}
-                    disabled={mergeBusy}
-                    onClick={() => void onMergeGroup(group)}
-                  >
-                    Merge
-                  </Button>
-                </div>
-                <ul className="space-y-1">
-                  {group.map((it, i) => (
-                    <li
-                      key={it.id}
-                      className="flex items-center gap-2 text-xs text-muted"
+            {duplicateGroups.map((group) => {
+              // Secret TOTP hanya selamat bila ada di item primary; item lain
+              // yang punya TOTP akan kehilangan secret-nya saat dihapus.
+              const totpLost = group.slice(1).some((it) => it.hasTotp);
+              return (
+                <li
+                  key={group[0].id}
+                  className="rounded-xl border border-line bg-raised p-3"
+                >
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-ink">
+                        {group[0].title}
+                      </p>
+                      <p className="text-[11px] text-muted">
+                        {group.length} items · keep “{group[0].title}”
+                      </p>
+                    </div>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon={Combine}
+                      disabled={mergeBusy || totpLost}
+                      onClick={() => void onMergeGroup(group)}
                     >
-                      <span
-                        className={cn(
-                          "grid h-4 w-4 shrink-0 place-items-center rounded text-[9px] font-semibold",
-                          i === 0
-                            ? "bg-accent text-accent-fg"
-                            : "bg-line text-muted",
-                        )}
+                      Merge
+                    </Button>
+                  </div>
+                  {totpLost && (
+                    <p className="mb-2 rounded-lg border border-warn/30 bg-warn-soft px-2 py-1 text-[11px] text-warn">
+                      2FA secret exists on a non-primary item — merging would
+                      discard it. Resolve manually first.
+                    </p>
+                  )}
+                  <ul className="space-y-1">
+                    {group.map((it, i) => (
+                      <li
+                        key={it.id}
+                        className="flex items-center gap-2 text-xs text-muted"
                       >
-                        {i === 0 ? "K" : "D"}
-                      </span>
-                      <span className="truncate">
-                        {it.username || "no username"}
-                        {it.url ? ` · ${hostnameFromUrl(it.url)}` : ""}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
+                        <span
+                          className={cn(
+                            "grid h-4 w-4 shrink-0 place-items-center rounded text-[9px] font-semibold",
+                            i === 0
+                              ? "bg-accent text-accent-fg"
+                              : "bg-line text-muted",
+                          )}
+                        >
+                          {i === 0 ? "K" : "D"}
+                        </span>
+                        <span className="truncate">
+                          {it.username || "no username"}
+                          {it.url ? ` · ${hostnameFromUrl(it.url)}` : ""}
+                          {it.hasTotp ? " · 2FA" : ""}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              );
+            })}
           </ul>
         )}
       </Modal>

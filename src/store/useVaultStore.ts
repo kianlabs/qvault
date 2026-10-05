@@ -34,7 +34,7 @@ interface VaultState {
   restoreHistory: (
     id: string,
     historyId: string,
-  ) => Promise<PasswordHistoryEntry>;
+  ) => Promise<PasswordHistoryEntry | null>;
 }
 
 export const useVaultStore = create<VaultState>((set) => ({

@@ -372,7 +372,8 @@ pub(crate) fn restore_password_history_impl(
             |row| row.get::<_, Option<String>>(0),
         )?;
         let new_history_id = new_id();
-        if let Some(cur) = current_blob.as_ref().filter(|s| !s.is_empty()) {
+        let displaced = current_blob.as_ref().filter(|s| !s.is_empty());
+        if let Some(cur) = displaced {
             conn.execute(
                 "INSERT INTO password_history (id, item_id, password_enc, created_at)
                  VALUES (?1, ?2, ?3, ?4)",
@@ -393,14 +394,18 @@ pub(crate) fn restore_password_history_impl(
         )?;
 
         log_activity(conn, "vault", "restore_password", None)?;
+        // `entry` = `Some` HANYA bila password lama benar-benar diarsipkan
+        // (item punya password aktif). Bila tidak, tak ada baris riwayat baru
+        // → `None` supaya frontend tidak menampilkan entri palsu.
+        let entry = displaced.map(|blob| PasswordHistoryEntry {
+            id: new_history_id,
+            item_id: item_id.clone(),
+            password: Some(dec_str(&key, &Some(blob.clone()))),
+            created_at: ts.clone(),
+        });
         Ok(NewPasswordHistoryEntry {
             restored_id: history_id.to_string(),
-            entry: PasswordHistoryEntry {
-                id: new_history_id,
-                item_id,
-                password: current_blob.map(|blob| dec_str(&key, &Some(blob))),
-                created_at: ts,
-            },
+            entry,
         })
     })
 }

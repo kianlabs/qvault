@@ -120,8 +120,9 @@ pub struct PasswordHistoryEntry {
 pub struct NewPasswordHistoryEntry {
     /// ID riwayat LAMA yang dipulihkan (dihapus setelah dipakai).
     pub restored_id: String,
-    /// Entri riwayat BARU yang berisi password yang barusan digantikan.
-    pub entry: PasswordHistoryEntry,
+    /// Entri riwayat BARU berisi password yang barusan digantikan. `None` bila
+    /// item tidak punya password aktif (tidak ada yang diarsipkan).
+    pub entry: Option<PasswordHistoryEntry>,
 }
 
 // ===========================================================================

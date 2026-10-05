@@ -207,7 +207,13 @@ fn password_change_records_history_and_restore_swaps() {
 
     // Restore → password aktif kembali "lama-123"; "baru-456" masuk riwayat.
     let res = restore_password_history_impl(&state, &hist[0].id).unwrap();
-    assert_eq!(res.entry.password.as_deref(), Some("baru-456"));
+    assert_eq!(
+        res.entry
+            .expect("ada password digantikan")
+            .password
+            .as_deref(),
+        Some("baru-456")
+    );
 
     let active = state.db.with(|conn| {
         let blob: Option<String> = conn.query_row(
@@ -235,4 +241,40 @@ fn same_password_does_not_add_history() {
     update_vault_item_impl(&state, "h2", payload_with_password("sama-123")).unwrap();
     let hist = list_password_history_impl(&state, "h2").unwrap();
     assert!(hist.is_empty(), "password sama tidak menambah riwayat");
+}
+
+#[test]
+fn restore_with_no_active_password_yields_no_entry() {
+    let state = test_state();
+    let key = random_key();
+    *state.vault_key.lock().unwrap() = Some(key.clone());
+    seed_item_with_password(&state, &key, "h3", "lama-999").unwrap();
+
+    // Ganti ke password baru → "lama-999" masuk riwayat.
+    update_vault_item_impl(&state, "h3", payload_with_password("baru-000")).unwrap();
+    // Lalu kosongkan password aktif (hook tidak mengarsipkan string kosong).
+    update_vault_item_impl(&state, "h3", payload_with_password("")).unwrap();
+
+    let hist = list_password_history_impl(&state, "h3").unwrap();
+    assert_eq!(hist.len(), 1, "riwayat tetap berisi password lama");
+
+    // Restore saat password aktif kosong → tidak ada yang diarsipkan.
+    let res = restore_password_history_impl(&state, &hist[0].id).unwrap();
+    assert!(
+        res.entry.is_none(),
+        "tidak ada entri baru bila password aktif kosong"
+    );
+
+    // Password lama tetap terpasang sebagai aktif.
+    let active = state.db.with(|conn| {
+        let blob: Option<String> = conn.query_row(
+            "SELECT password_enc FROM vault_items WHERE id = 'h3'",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok::<String, crate::error::AppError>(dec_str(&key, &blob))
+    });
+    assert_eq!(active.unwrap(), "lama-999");
+    // Riwayat kini kosong (entri yang dipulihkan dihapus, tak ada pengganti).
+    assert!(list_password_history_impl(&state, "h3").unwrap().is_empty());
 }

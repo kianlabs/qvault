@@ -12,10 +12,19 @@ const RANGE_URL = "https://api.pwnedpasswords.com/range/";
 /** Cache respons range (prefix → Map<suffix, count>) agar tidak fetch berulang. */
 const rangeCache = new Map<string, Map<string, number>>();
 
-/** SHA-1 heksadesimal huruf besar dari sebuah string (Web Crypto). */
+/** SHA-1 heksadesimal huruf besar dari sebuah string (Web Crypto).
+ *
+ * `crypto.subtle` tersedia karena webview Tauri mendaftarkan skema kustomnya
+ * sebagai secure context (wry: `register_uri_scheme_as_secure`). Bila tetap
+ * tidak ada (mis. konteks tak aman), kita melempar — pemanggil WAJIB
+ * melaporkan item sebagai "gagal dicek", bukan "aman". */
 async function sha1HexUpper(text: string): Promise<string> {
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) {
+    throw new Error("WebCrypto unavailable — cannot compute SHA-1");
+  }
   const bytes = new TextEncoder().encode(text);
-  const digest = await crypto.subtle.digest("SHA-1", bytes);
+  const digest = await subtle.digest("SHA-1", bytes);
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("")
@@ -46,7 +55,7 @@ async function fetchRange(prefix: string): Promise<Map<string, number>> {
 
 /**
  * Berapa kali sebuah password muncul di kebocoran data publik.
- * 0 = tidak ditemukan (aman). Melempar error bila jaringan gagal.
+ * 0 = tidak ditemukan (aman). Melempar error bila hash/jaringan gagal.
  */
 export async function breachCount(password: string): Promise<number> {
   if (!password) return 0;
@@ -57,16 +66,27 @@ export async function breachCount(password: string): Promise<number> {
   return range.get(suffix) ?? 0;
 }
 
+/** Hasil cek massal: peta indeks → jumlah kebocoran, plus indeks yang GAGAL. */
+export interface BreachScanResult {
+  /** indeks password (dalam array input) → jumlah kemunculan (≥0). */
+  counts: Map<number, number>;
+  /** indeks password yang gagal dicek (jaringan/hash) — BELUM terverifikasi. */
+  failed: number[];
+}
+
 /**
  * Cek banyak password dengan konkurensi terbatas (ramah ke API).
- * Mengembalikan peta indeks → jumlah kebocoran. Password yang gagal dicek
- * di-skip (tidak ada di peta) agar satu error jaringan tidak menggagalkan semua.
+ *
+ * Resilien per-item: satu kegagalan tidak menggagalkan seluruh batch, TAPI
+ * kegagalan DILAPORKAN lewat `failed` supaya UI tidak pernah menampilkan
+ * "aman" untuk password yang sebenarnya belum terverifikasi.
  */
 export async function breachCounts(
   passwords: string[],
   concurrency = 5,
-): Promise<Map<number, number>> {
-  const result = new Map<number, number>();
+): Promise<BreachScanResult> {
+  const counts = new Map<number, number>();
+  const failed: number[] = [];
   let cursor = 0;
 
   async function worker() {
@@ -75,9 +95,9 @@ export async function breachCounts(
       const pw = passwords[i];
       if (!pw) continue;
       try {
-        result.set(i, await breachCount(pw));
+        counts.set(i, await breachCount(pw));
       } catch {
-        // Abaikan: item tanpa hasil dianggap belum terverifikasi, bukan aman.
+        failed.push(i);
       }
     }
   }
@@ -87,5 +107,7 @@ export async function breachCounts(
     () => worker(),
   );
   await Promise.all(workers);
-  return result;
+
+  failed.sort((a, b) => a - b);
+  return { counts, failed };
 }

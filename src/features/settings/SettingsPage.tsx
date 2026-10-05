@@ -778,7 +778,8 @@ export default function SettingsPage() {
           <div>
             <p className="text-sm font-semibold text-ink">Import from browser</p>
             <p className="text-xs text-muted">
-              Bring passwords in from a Chrome or Bitwarden CSV export.
+              Bring passwords in from a Chrome, Chromium, Brave, Edge or
+              Bitwarden CSV export.
             </p>
           </div>
 
@@ -792,7 +793,7 @@ export default function SettingsPage() {
                 <code className="rounded bg-raised px-1">
                   chrome://password-manager/settings
                 </code>{" "}
-                (Chrome / Chromium) or{" "}
+                (Chrome / Chromium / Edge) or{" "}
                 <code className="rounded bg-raised px-1">
                   brave://password-manager/settings
                 </code>{" "}

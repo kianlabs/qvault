@@ -278,8 +278,11 @@ export interface PasswordHistoryEntry {
 export interface NewPasswordHistoryEntry {
   /** ID of the restored entry (removed after restore). */
   restoredId: string;
-  /** The old current password, now pushed onto the history stack. */
-  entry: PasswordHistoryEntry;
+  /**
+   * The old current password, now pushed onto the history stack — `null` when
+   * the item had no active password, so nothing was archived.
+   */
+  entry: PasswordHistoryEntry | null;
 }
 
 // ---------------------------------------------------------------------------
