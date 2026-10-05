@@ -37,6 +37,9 @@ pub fn run() {
             commands::vault::delete_vault_item,
             commands::vault::toggle_vault_favorite,
             commands::vault::reveal_vault_password,
+            // vault — Wave 6 (riwayat password)
+            commands::vault::list_password_history,
+            commands::vault::restore_password_history,
             // notes
             commands::notes::list_notes,
             commands::notes::create_note,

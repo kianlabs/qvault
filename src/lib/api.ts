@@ -17,6 +17,8 @@ import type {
   Note,
   NoteListParams,
   NotePayload,
+  NewPasswordHistoryEntry,
+  PasswordHistoryEntry,
   Settings,
   SettingsPayload,
   Task,
@@ -64,6 +66,10 @@ export const api = {
     invoke<void>("toggle_vault_favorite", { id }),
   revealVaultPassword: (id: string) =>
     invoke<string>("reveal_vault_password", { id }),
+  listPasswordHistory: (id: string) =>
+    invoke<PasswordHistoryEntry[]>("list_password_history", { id }),
+  restorePasswordHistory: (historyId: string) =>
+    invoke<NewPasswordHistoryEntry>("restore_password_history", { historyId }),
 
   // --- notes.rs ------------------------------------------------------------
   listNotes: (p?: NoteListParams) =>

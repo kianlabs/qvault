@@ -797,6 +797,37 @@ pub(crate) fn list_auto_backups_impl() -> Result<Vec<String>> {
     list_backup_files(&dir)
 }
 
+/// Wave 6: tag otomatis dari domain URL (host tanpa prefix "www.", huruf kecil).
+/// Mengembalikan "" bila URL kosong/tidak valid, sehingga importer bisa memilih
+/// menulis `[]` ketimbang tag sampah.
+fn domain_tag(url: &str) -> String {
+    let url = url.trim();
+    if url.is_empty() {
+        return String::new();
+    }
+    let with_scheme = if url.contains("://") {
+        url.to_string()
+    } else {
+        format!("https://{url}")
+    };
+    with_scheme
+        .split("://")
+        .nth(1)
+        .unwrap_or("")
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or("")
+        .rsplit('@') // buang userinfo (user:pass@host)
+        .next()
+        .unwrap_or("")
+        .split(':') // buang port
+        .next()
+        .unwrap_or("")
+        .trim_start_matches("www.")
+        .trim_end_matches('.')
+        .to_ascii_lowercase()
+}
+
 /// Impor CSV dari Chrome / Bitwarden (`kind` = "chrome" | "bitwarden") ke vault_items.
 #[tauri::command]
 pub fn import_browser_csv(
@@ -880,6 +911,14 @@ pub(crate) fn import_browser_csv_impl(
 
             let id = new_id();
             let ts = now();
+            // Wave 6: tag otomatis dari domain (mis. "github.com") agar hasil impor
+            // langsung terkelompok. Tag kosong → "[]" (bukan tag sampah).
+            let tag = domain_tag(&url);
+            let tags_json = if tag.is_empty() {
+                "[]".to_string()
+            } else {
+                tags_to_json(&[tag])
+            };
             conn.execute(
                 "INSERT INTO vault_items
                     (id, title, username_enc, password_enc, url, notes_enc, tags,
@@ -892,7 +931,7 @@ pub(crate) fn import_browser_csv_impl(
                     enc_opt(&key, &none_if_empty(password))?,
                     none_if_empty(url),
                     enc_opt(&key, &none_if_empty(notes))?,
-                    "[]",
+                    tags_json,
                     Option::<String>::None,
                     0i64,
                     Option::<String>::None,
@@ -926,6 +965,19 @@ mod tests {
             degraded: None,
             unlock_fails: std::sync::Mutex::new(crate::state::UnlockGuard::default()),
         }
+    }
+
+    #[test]
+    fn domain_tag_extracts_host() {
+        assert_eq!(domain_tag("https://www.github.com/login"), "github.com");
+        assert_eq!(domain_tag("github.com"), "github.com");
+        assert_eq!(
+            domain_tag("http://Sub.Example.COM:8443/x?y=1"),
+            "sub.example.com"
+        );
+        assert_eq!(domain_tag("https://user:pw@host.io/path"), "host.io");
+        assert_eq!(domain_tag(""), "");
+        assert_eq!(domain_tag("   "), "");
     }
 
     /// Seed: isi vault + note + task + income dengan field sensitif terenkripsi.

@@ -12,7 +12,7 @@ import { checkForUpdate, isTauri } from "../lib/updater";
 export default function AboutCard() {
   const toast = useToast();
   const showUpdate = useUpdaterStore((s) => s.show);
-  const [version, setVersion] = useState<string>("0.1.4");
+  const [version, setVersion] = useState<string>("0.1.5");
   const [checking, setChecking] = useState(false);
 
   useEffect(() => {

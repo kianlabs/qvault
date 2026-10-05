@@ -98,3 +98,13 @@ CREATE TABLE IF NOT EXISTS templates (
     updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_templates_kind ON templates(kind);
+
+-- Wave 6: riwayat password per item vault. Menyimpan blob password LAMA
+-- ("nonce_b64:ct_b64") setiap kali password diganti, agar bisa dikembalikan.
+CREATE TABLE IF NOT EXISTS password_history (
+    id           TEXT PRIMARY KEY,
+    item_id      TEXT NOT NULL,
+    password_enc TEXT NOT NULL,
+    created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_password_history_item ON password_history(item_id);

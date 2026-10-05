@@ -5,11 +5,14 @@ import {
   Copy,
   Eye,
   EyeOff,
+  History,
   KeyRound,
+  Layers,
   Loader2,
   Pencil,
   Plus,
   RefreshCw,
+  RotateCcw,
   Star,
   Trash2,
 } from "lucide-react";
@@ -20,6 +23,7 @@ import PasswordStrength from "../../components/PasswordStrength";
 import TotpField from "../../components/TotpField";
 import { useToast } from "../../components/Toast";
 import {
+  Badge,
   Button,
   Card,
   Field,
@@ -38,7 +42,11 @@ import { staggerIn, useGsap } from "../../lib/motion";
 import { useFoldersStore } from "../../store/useFoldersStore";
 import { useSettingsStore } from "../../store/useSettingsStore";
 import { useVaultStore } from "../../store/useVaultStore";
-import type { VaultItem, VaultItemPayload } from "../../lib/types";
+import type {
+  PasswordHistoryEntry,
+  VaultItem,
+  VaultItemPayload,
+} from "../../lib/types";
 import {
   cn,
   formatDate,
@@ -136,6 +144,8 @@ export default function VaultPage() {
     remove,
     toggleFavorite,
     revealPassword,
+    loadHistory,
+    restoreHistory,
   } = useVaultStore();
   const { items: folders, load: loadFolders } = useFoldersStore();
   // Wave 4 — durasi auto-clear clipboard dari settings (fallback 30s).
@@ -159,6 +169,12 @@ export default function VaultPage() {
   const [view, setView] = useState<ViewMode>(readView);
   // URL favicon yang gagal dimuat → fallback ke inisial.
   const [brokenIcons, setBrokenIcons] = useState<Record<string, boolean>>({});
+  // Wave 6 — tampilkan hanya item duplikat (judul sama, case-insensitive).
+  const [dupesOnly, setDupesOnly] = useState(false);
+  // Wave 6 — item yang sedang dibuka panel riwayat passwordnya.
+  const [historyItem, setHistoryItem] = useState<VaultItem | null>(null);
+  const [history, setHistory] = useState<PasswordHistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   function changeView(next: ViewMode) {
     setView(next);
@@ -210,10 +226,28 @@ export default function VaultPage() {
     return m;
   }, [folders]);
 
+  /** Wave 6 — id item yang judulnya duplikat (≥2 item judul sama, case-insensitive). */
+  const duplicateIds = useMemo(() => {
+    const byTitle = new Map<string, string[]>();
+    for (const it of items) {
+      const key = it.title.trim().toLowerCase();
+      if (!key) continue;
+      const list = byTitle.get(key) ?? [];
+      list.push(it.id);
+      byTitle.set(key, list);
+    }
+    const ids = new Set<string>();
+    for (const list of byTitle.values()) {
+      if (list.length > 1) for (const id of list) ids.add(id);
+    }
+    return ids;
+  }, [items]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter((it) => {
       if (favoriteOnly && !it.favorite) return false;
+      if (dupesOnly && !duplicateIds.has(it.id)) return false;
       if (folderId && it.folderId !== folderId) return false;
       if (!q) return true;
       return (
@@ -223,7 +257,7 @@ export default function VaultPage() {
         it.tags.some((t) => t.toLowerCase().includes(q))
       );
     });
-  }, [items, search, favoriteOnly, folderId]);
+  }, [items, search, favoriteOnly, folderId, dupesOnly, duplicateIds]);
 
   // Entrance motion (presentation only): the vault grid/list items cascade in.
   // Grid: cards are direct children. List: rows sit inside the Card wrapper.
@@ -341,6 +375,42 @@ export default function VaultPage() {
     }
   }
 
+  /** Wave 6 — buka panel riwayat password untuk satu item. */
+  async function openHistory(item: VaultItem) {
+    setHistoryItem(item);
+    setHistory([]);
+    setHistoryLoading(true);
+    try {
+      setHistory(await loadHistory(item.id));
+    } catch {
+      toast.error("Could not load password history");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  /** Wave 6 — pulihkan password lama; password saat ini masuk ke riwayat. */
+  async function onRestore(entry: PasswordHistoryEntry) {
+    if (!historyItem) return;
+    if (
+      !window.confirm(
+        "Restore this password? The current password will be moved to history.",
+      )
+    )
+      return;
+    try {
+      const displaced = await restoreHistory(historyItem.id, entry.id);
+      // Entri yang dipulihkan hilang; entri baru (password lama saat ini) masuk paling atas.
+      setHistory((h) => [
+        displaced,
+        ...h.filter((e) => e.id !== entry.id),
+      ]);
+      toast.success("Password restored");
+    } catch {
+      toast.error("Could not restore password");
+    }
+  }
+
   /** Aksi sekunder per baris (ikon soup dipindah ke menu "⋯"). */
   function rowMenu(item: VaultItem, shown: string | undefined): MenuItem[] {
     const base: MenuItem[] = [
@@ -364,6 +434,11 @@ export default function VaultPage() {
         onClick: () => void onToggleFavorite(item),
       },
       { label: "Edit", icon: Pencil, onClick: () => openEdit(item) },
+      {
+        label: "Password history",
+        icon: History,
+        onClick: () => void openHistory(item),
+      },
       {
         label: "Delete",
         icon: busyId === item.id ? Loader2 : Trash2,
@@ -425,6 +500,15 @@ export default function VaultPage() {
         >
           Favorites
         </Button>
+        {duplicateIds.size > 0 && (
+          <Button
+            variant={dupesOnly ? "primary" : "secondary"}
+            icon={Layers}
+            onClick={() => setDupesOnly((v) => !v)}
+          >
+            Duplicates ({duplicateIds.size})
+          </Button>
+        )}
         <Tabs
           items={[
             { value: "grid", label: "Grid" },
@@ -490,6 +574,9 @@ export default function VaultPage() {
                           aria-hidden
                         />
                       )}
+                      {duplicateIds.has(item.id) && (
+                        <Badge tone="warn">dupe</Badge>
+                      )}
                     </div>
                     <p className="truncate text-xs text-muted">
                       {item.username || "—"}
@@ -553,6 +640,9 @@ export default function VaultPage() {
                           className="h-3.5 w-3.5 shrink-0 fill-current text-warn"
                           aria-hidden
                         />
+                      )}
+                      {duplicateIds.has(item.id) && (
+                        <Badge tone="warn">dupe</Badge>
                       )}
                     </div>
                     <p className="truncate text-xs text-muted">
@@ -719,6 +809,51 @@ export default function VaultPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Wave 6 — riwayat password lama (terbaru dulu) + aksi pulihkan. */}
+      <Modal
+        open={historyItem !== null}
+        onClose={() => setHistoryItem(null)}
+        title={historyItem ? `Password history · ${historyItem.title}` : ""}
+      >
+        {historyLoading ? (
+          <div className="grid place-items-center py-10 text-muted">
+            <Loader2 className="h-5 w-5 animate-spin" />
+          </div>
+        ) : history.length === 0 ? (
+          <EmptyState
+            icon={History}
+            title="No previous passwords"
+            hint="Old passwords are kept here each time you change this item's password."
+          />
+        ) : (
+          <ul className="space-y-2">
+            {history.map((entry) => (
+              <li
+                key={entry.id}
+                className="flex items-center gap-3 rounded-lg border border-line bg-raised px-3 py-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-mono text-xs text-ink">
+                    {entry.password || "—"}
+                  </p>
+                  <p className="text-[11px] text-muted">
+                    {formatDate(entry.createdAt)}
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={RotateCcw}
+                  onClick={() => void onRestore(entry)}
+                >
+                  Restore
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
       </Modal>
     </div>
   );

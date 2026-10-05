@@ -4,9 +4,18 @@
 // UI bahasa Inggris, komentar bahasa Indonesia. Lapisan tampilan saja — logika identik.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Copy, KeyRound, Lock, RefreshCw, ShieldAlert } from "lucide-react";
+import {
+  Copy,
+  KeyRound,
+  Loader2,
+  Lock,
+  RefreshCw,
+  ShieldAlert,
+  ShieldX,
+} from "lucide-react";
 import { useVaultStore } from "../../store/useVaultStore";
 import { cn, formatDate, parseDate, passwordStrength } from "../../lib/utils";
+import { breachCounts } from "../../lib/hibp";
 import { staggerIn, useGsap } from "../../lib/motion";
 import EmptyState from "../../components/EmptyState";
 import {
@@ -91,7 +100,7 @@ function analyze(items: VaultItem[]): HealthReport {
   return { total, healthy, score, weak, reused, stale, missing, no2fa, counts };
 }
 
-type TabKey = "weak" | "reused" | "stale" | "missing" | "no2fa";
+type TabKey = "weak" | "reused" | "stale" | "missing" | "no2fa" | "breached";
 
 interface TabDef {
   key: TabKey;
@@ -105,6 +114,11 @@ const TABS: TabDef[] = [
   { key: "stale", label: "Stale", hint: `Not updated in over ${STALE_DAYS} days.` },
   { key: "missing", label: "Missing", hint: "Items saved without a password." },
   { key: "no2fa", label: "No 2FA", hint: "Items without a TOTP secret." },
+  {
+    key: "breached",
+    label: "Breached",
+    hint: "Found in known data breaches (checked privately via k-anonymity).",
+  },
 ];
 
 /** Tone semantik untuk skor total (satu warna = satu makna). */
@@ -127,6 +141,43 @@ export default function HealthPage() {
 
   const report = useMemo(() => analyze(items), [items]);
   const [tab, setTab] = useState<TabKey>("weak");
+
+  // Wave 6 — cek kebocoran HIBP (k-anonymity). Hanya jalan saat user menekan
+  // tombol, bukan otomatis, supaya password tidak dicek tanpa sepengetahuan user.
+  const [breachCountsMap, setBreachCountsMap] = useState<Map<string, number>>(
+    new Map(),
+  );
+  const [breachBusy, setBreachBusy] = useState(false);
+  const [breachError, setBreachError] = useState<string | null>(null);
+  const [breachDone, setBreachDone] = useState(false);
+
+  async function runBreachCheck() {
+    setBreachBusy(true);
+    setBreachError(null);
+    try {
+      const withPw = items.filter((it) => it.password);
+      const counts = await breachCounts(withPw.map((it) => it.password));
+      const byId = new Map<string, number>();
+      withPw.forEach((it, i) => {
+        const n = counts.get(i);
+        if (n && n > 0) byId.set(it.id, n);
+      });
+      setBreachCountsMap(byId);
+      setBreachDone(true);
+    } catch (err) {
+      setBreachError(
+        err instanceof Error ? err.message : "Could not reach the breach service",
+      );
+    } finally {
+      setBreachBusy(false);
+    }
+  }
+
+  /** Item yang passwordnya muncul di kebocoran data (berdasarkan hasil cek). */
+  const breachedItems = useMemo(
+    () => items.filter((it) => (breachCountsMap.get(it.id) ?? 0) > 0),
+    [items, breachCountsMap],
+  );
 
   // Entrance motion (presentation only): cascade the summary grid on mount and
   // re-cascade the problem list whenever the active filter (tab) changes.
@@ -154,8 +205,10 @@ export default function HealthPage() {
         return report.missing;
       case "no2fa":
         return report.no2fa;
+      case "breached":
+        return breachedItems;
     }
-  }, [tab, report]);
+  }, [tab, report, breachedItems]);
 
   const activeDef = TABS.find((t) => t.key === tab) ?? TABS[0];
 
@@ -173,6 +226,10 @@ export default function HealthPage() {
         return "No password stored";
       case "no2fa":
         return "2FA not enabled";
+      case "breached": {
+        const n = breachCountsMap.get(item.id) ?? 0;
+        return `Seen in ${n.toLocaleString()} breach${n === 1 ? "" : "es"}`;
+      }
     }
   };
 
@@ -182,6 +239,7 @@ export default function HealthPage() {
     stale: report.stale.length,
     missing: report.missing.length,
     no2fa: report.no2fa.length,
+    breached: breachedItems.length,
   };
 
   const stats: { label: string; value: number; icon: typeof KeyRound; tone: Tone }[] = [
@@ -196,7 +254,39 @@ export default function HealthPage() {
       <PageHeader
         title="Password health"
         subtitle="Find weak, reused, stale and missing credentials — and logins without 2FA."
+        actions={
+          <Button
+            variant="secondary"
+            icon={breachBusy ? Loader2 : ShieldX}
+            onClick={() => void runBreachCheck()}
+            disabled={breachBusy || report.total === 0}
+          >
+            {breachBusy ? "Checking…" : "Check breaches"}
+          </Button>
+        }
       />
+
+      {breachError && (
+        <div className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-2 text-xs text-danger">
+          {breachError}
+        </div>
+      )}
+      {breachDone && !breachError && (
+        <div
+          className={cn(
+            "rounded-xl border px-4 py-2 text-xs",
+            breachedItems.length > 0
+              ? "border-danger/30 bg-danger-soft text-danger"
+              : "border-success/30 bg-success-soft text-success",
+          )}
+        >
+          {breachedItems.length > 0
+            ? `${breachedItems.length} password${
+                breachedItems.length === 1 ? "" : "s"
+              } found in known breaches — see the “Breached” tab.`
+            : "No passwords found in known breaches. Nice work."}
+        </div>
+      )}
 
       {report.total === 0 ? (
         <EmptyState

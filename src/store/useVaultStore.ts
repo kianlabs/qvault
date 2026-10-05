@@ -4,7 +4,12 @@ import { create } from "zustand";
 
 import { api } from "../lib/api";
 import { errorMessage } from "../lib/utils";
-import type { VaultItem, VaultItemPayload, VaultListParams } from "../lib/types";
+import type {
+  PasswordHistoryEntry,
+  VaultItem,
+  VaultItemPayload,
+  VaultListParams,
+} from "../lib/types";
 
 interface VaultState {
   items: VaultItem[];
@@ -19,6 +24,17 @@ interface VaultState {
   toggleFavorite: (id: string) => Promise<void>;
   /** Reveal a stored password (returns plaintext; never cached in state). */
   revealPassword: (id: string) => Promise<string>;
+  /** Wave 6 — load the old-password history for one item (newest first). */
+  loadHistory: (id: string) => Promise<PasswordHistoryEntry[]>;
+  /**
+   * Wave 6 — restore an old password. Pushes the current password onto the
+   * history stack and returns the displaced entry so the caller can update its
+   * local history list without a full reload.
+   */
+  restoreHistory: (
+    id: string,
+    historyId: string,
+  ) => Promise<PasswordHistoryEntry>;
 }
 
 export const useVaultStore = create<VaultState>((set) => ({
@@ -91,6 +107,34 @@ export const useVaultStore = create<VaultState>((set) => ({
   revealPassword: async (id) => {
     try {
       return await api.revealVaultPassword(id);
+    } catch (err) {
+      set({ error: errorMessage(err) });
+      throw err;
+    }
+  },
+
+  loadHistory: async (id) => {
+    try {
+      return await api.listPasswordHistory(id);
+    } catch (err) {
+      set({ error: errorMessage(err) });
+      throw err;
+    }
+  },
+
+  restoreHistory: async (id, historyId) => {
+    set({ error: null });
+    try {
+      const res = await api.restorePasswordHistory(historyId);
+      // Perbarui password item di daftar lokal (password lama jadi aktif).
+      const fresh = await api.listVaultItems();
+      const item = fresh.find((it) => it.id === id);
+      if (item) {
+        set((s) => ({
+          items: s.items.map((it) => (it.id === id ? item : it)),
+        }));
+      }
+      return res.entry;
     } catch (err) {
       set({ error: errorMessage(err) });
       throw err;

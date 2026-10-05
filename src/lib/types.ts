@@ -263,6 +263,26 @@ export interface TotpStatus {
 export type BrowserKind = "chrome" | "bitwarden";
 
 // ---------------------------------------------------------------------------
+// Wave 6 — password history (commands/vault.rs)
+// ---------------------------------------------------------------------------
+
+/** One old password for a vault item. */
+export interface PasswordHistoryEntry {
+  id: string;
+  itemId: string;
+  password: string;
+  createdAt: string;
+}
+
+/** Result of `restore_password_history` (the entry displaced by the restore). */
+export interface NewPasswordHistoryEntry {
+  /** ID of the restored entry (removed after restore). */
+  restoredId: string;
+  /** The old current password, now pushed onto the history stack. */
+  entry: PasswordHistoryEntry;
+}
+
+// ---------------------------------------------------------------------------
 // List query params (camelCase arg keys matching SPEC §4)
 // ---------------------------------------------------------------------------
 

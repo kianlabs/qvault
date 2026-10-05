@@ -8,7 +8,7 @@ use tauri::State;
 
 use crate::crypto::Key;
 use crate::error::{AppError, Result};
-use crate::models::{VaultItem, VaultItemPayload};
+use crate::models::{NewPasswordHistoryEntry, PasswordHistoryEntry, VaultItem, VaultItemPayload};
 use crate::state::AppState;
 
 use super::{
@@ -159,6 +159,32 @@ pub(crate) fn update_vault_item_impl(
         // Wave 4: kolom totp_enc wajib ada sebelum UPDATE.
         ensure_column(conn, "vault_items", "totp_enc", "TEXT")?;
 
+        // Wave 6: sebelum menimpa password, simpan password LAMA ke riwayat.
+        // Hanya bila password baru non-kosong DAN berbeda dari yang lama —
+        // sehingga riwayat berisi nilai yang benar-benar pernah dipakai.
+        let new_password = payload.password.clone().unwrap_or_default();
+        if !new_password.is_empty() {
+            let old_blob: Option<Option<String>> = conn
+                .query_row(
+                    "SELECT password_enc FROM vault_items WHERE id = ?1",
+                    rusqlite::params![id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            if let Some(Some(old_blob)) = old_blob {
+                if !old_blob.is_empty() {
+                    let old_plain = dec_str(&key, &Some(old_blob.clone()));
+                    if !old_plain.is_empty() && old_plain != new_password {
+                        conn.execute(
+                            "INSERT INTO password_history (id, item_id, password_enc, created_at)
+                             VALUES (?1, ?2, ?3, ?4)",
+                            rusqlite::params![new_id(), id, old_blob, ts],
+                        )?;
+                    }
+                }
+            }
+        }
+
         // Tri-state TOTP:
         // - None → field absen, JANGAN sentuh kolom totp_enc (preserve).
         // - Some(v) → update totp_enc = enc_opt(&key, &v).
@@ -278,6 +304,107 @@ pub fn reveal_vault_password(state: State<'_, AppState>, id: String) -> Result<S
             .ok_or_else(|| AppError::Msg(format!("item vault tidak ditemukan: {id}")))?;
         Ok(dec_str(&key, &blob))
     })
+}
+
+/// Wave 6: daftar riwayat password LAMA sebuah item (terbaru dulu).
+pub(crate) fn list_password_history_impl(
+    state: &AppState,
+    id: &str,
+) -> Result<Vec<PasswordHistoryEntry>> {
+    let key = dek(state)?;
+    state.db.with(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT id, item_id, password_enc, created_at
+               FROM password_history WHERE item_id = ?1 ORDER BY created_at DESC",
+        )?;
+        let rows = stmt
+            .query_map(rusqlite::params![id], |row| {
+                let blob: String = row.get(2)?;
+                Ok(PasswordHistoryEntry {
+                    id: row.get(0)?,
+                    item_id: row.get(1)?,
+                    password: Some(dec_str(&key, &Some(blob))),
+                    created_at: row.get(3)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    })
+}
+
+#[tauri::command]
+pub fn list_password_history(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<Vec<PasswordHistoryEntry>> {
+    list_password_history_impl(&state, &id)
+}
+
+/// Wave 6: pulihkan password dari riwayat. Password saat ini disimpan ke riwayat
+/// lebih dulu, lalu entri riwayat yang dipulihkan dihapus (riwayat bergeser, tidak
+/// menggandakan nilai).
+pub(crate) fn restore_password_history_impl(
+    state: &AppState,
+    history_id: &str,
+) -> Result<NewPasswordHistoryEntry> {
+    let key = dek(state)?;
+    let ts = now();
+    state.db.with(|conn| {
+        let (item_id, old_blob): (String, String) = conn
+            .query_row(
+                "SELECT item_id, password_enc FROM password_history WHERE id = ?1",
+                rusqlite::params![history_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?
+            .ok_or_else(|| AppError::Msg(format!("entri riwayat tidak ditemukan: {history_id}")))?;
+
+        // Password saat ini (yang akan digantikan) → simpan ke riwayat baru.
+        let current_blob: Option<String> = conn.query_row(
+            "SELECT password_enc FROM vault_items WHERE id = ?1",
+            rusqlite::params![item_id],
+            |row| row.get::<_, Option<String>>(0),
+        )?;
+        let new_history_id = new_id();
+        if let Some(cur) = current_blob.as_ref().filter(|s| !s.is_empty()) {
+            conn.execute(
+                "INSERT INTO password_history (id, item_id, password_enc, created_at)
+                 VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![new_history_id, item_id, cur, ts],
+            )?;
+        }
+
+        // Pasang password lama sebagai password aktif.
+        conn.execute(
+            "UPDATE vault_items SET password_enc = ?1, updated_at = ?2 WHERE id = ?3",
+            rusqlite::params![old_blob, ts, item_id],
+        )?;
+
+        // Entri yang dipulihkan sudah tidak relevan → hapus.
+        conn.execute(
+            "DELETE FROM password_history WHERE id = ?1",
+            rusqlite::params![history_id],
+        )?;
+
+        log_activity(conn, "vault", "restore_password", None)?;
+        Ok(NewPasswordHistoryEntry {
+            restored_id: history_id.to_string(),
+            entry: PasswordHistoryEntry {
+                id: new_history_id,
+                item_id,
+                password: current_blob.map(|blob| dec_str(&key, &Some(blob))),
+                created_at: ts,
+            },
+        })
+    })
+}
+
+#[tauri::command]
+pub fn restore_password_history(
+    state: State<'_, AppState>,
+    history_id: String,
+) -> Result<NewPasswordHistoryEntry> {
+    restore_password_history_impl(&state, &history_id)
 }
 
 #[cfg(test)]

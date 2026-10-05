@@ -102,6 +102,28 @@ pub struct ActivityEntry {
     pub created_at: String,
 }
 
+/// Wave 6: satu entri riwayat password LAMA untuk sebuah item vault.
+/// `password` sudah didekripsi di layer command (kontrak A.4: "" bila gagal).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PasswordHistoryEntry {
+    pub id: String,
+    pub item_id: String,
+    pub password: Option<String>,
+    pub created_at: String,
+}
+
+/// Wave 6: entri riwayat baru hasil operasi "restore" (dikembalikan ke frontend
+/// agar store bisa memperbarui state tanpa memuat ulang seluruh riwayat).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewPasswordHistoryEntry {
+    /// ID riwayat LAMA yang dipulihkan (dihapus setelah dipakai).
+    pub restored_id: String,
+    /// Entri riwayat BARU yang berisi password yang barusan digantikan.
+    pub entry: PasswordHistoryEntry,
+}
+
 // ===========================================================================
 // Payload models (input dari frontend untuk create/update)
 // ===========================================================================
