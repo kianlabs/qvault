@@ -77,9 +77,10 @@ fn row_to_json(row: &Row<'_>, cols: &[String]) -> rusqlite::Result<Value> {
 
 /// Tabel yang disertakan dalam backup, urut aman untuk restore
 /// (folders sebelum item yang mereferensikannya).
-const BACKUP_TABLES: [&str; 7] = [
+const BACKUP_TABLES: [&str; 8] = [
     "folders",
     "vault_items",
+    "password_history",
     "notes",
     "tasks",
     "income",
@@ -978,6 +979,42 @@ mod tests {
         assert_eq!(domain_tag("https://user:pw@host.io/path"), "host.io");
         assert_eq!(domain_tag(""), "");
         assert_eq!(domain_tag("   "), "");
+    }
+
+    /// Wave 6: impor browser memberi tag otomatis dari domain URL.
+    #[test]
+    fn import_browser_csv_auto_tags_domain() {
+        let state = test_state();
+        let dek_key = random_key();
+        *state.vault_key.lock().unwrap() = Some(dek_key.clone());
+
+        let path = std::env::temp_dir().join("qvault_test_autotag.csv");
+        let path_s = path.to_string_lossy().to_string();
+        std::fs::write(
+            &path,
+            "name,url,username,password,note\n\
+             GitHub,https://www.github.com,kyan,s3cr3t,\n\
+             Local,,nouser,pw,\n",
+        )
+        .unwrap();
+
+        let res = import_browser_csv_impl(&state, "chrome".into(), path_s).unwrap();
+        assert_eq!(res.imported, 2);
+
+        let tags: Vec<String> = state
+            .db
+            .with(|conn| {
+                let mut stmt = conn.prepare("SELECT tags FROM vault_items ORDER BY title")?;
+                let rows = stmt
+                    .query_map([], |r| r.get::<_, String>(0))?
+                    .collect::<rusqlite::Result<Vec<_>>>()?;
+                Ok(rows)
+            })
+            .unwrap();
+        assert_eq!(tags[0], "[\"github.com\"]", "GitHub → tag domain");
+        assert_eq!(tags[1], "[]", "URL kosong → tanpa tag");
+
+        let _ = std::fs::remove_file(&path);
     }
 
     /// Seed: isi vault + note + task + income dengan field sensitif terenkripsi.

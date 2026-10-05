@@ -781,6 +781,38 @@ export default function SettingsPage() {
               Bring passwords in from a Chrome or Bitwarden CSV export.
             </p>
           </div>
+
+          <details className="rounded-lg border border-line bg-bg px-3 py-2 text-xs text-muted">
+            <summary className="cursor-pointer font-medium text-ink">
+              How to export a CSV
+            </summary>
+            <ol className="mt-2 list-decimal space-y-1 pl-4">
+              <li>
+                Open your browser&apos;s password manager settings:{" "}
+                <code className="rounded bg-raised px-1">
+                  chrome://password-manager/settings
+                </code>{" "}
+                (Chrome / Chromium) or{" "}
+                <code className="rounded bg-raised px-1">
+                  brave://password-manager/settings
+                </code>{" "}
+                (Brave).
+              </li>
+              <li>
+                Under <span className="text-ink">Export passwords</span>, choose{" "}
+                <span className="text-ink">Download file</span> and confirm.
+              </li>
+              <li>
+                If you use several browser profiles, repeat the export for each
+                profile, then import them here one at a time.
+              </li>
+              <li>
+                Pick the matching <span className="text-ink">Source</span> below,
+                then click <span className="text-ink">Import CSV</span>.
+              </li>
+            </ol>
+          </details>
+
           <div className="flex flex-wrap items-end gap-2">
             <Field label="Source" className="min-w-[180px]">
               <select

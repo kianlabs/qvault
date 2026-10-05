@@ -2,6 +2,7 @@
 // Lapisan tampilan saja: seluruh state/handler/store dipertahankan identik.
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
+  Combine,
   Copy,
   Eye,
   EyeOff,
@@ -175,6 +176,9 @@ export default function VaultPage() {
   const [historyItem, setHistoryItem] = useState<VaultItem | null>(null);
   const [history, setHistory] = useState<PasswordHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  // Wave 6 — panel "gabung duplikat" (kelompok judul sama).
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeBusy, setMergeBusy] = useState(false);
 
   function changeView(next: ViewMode) {
     setView(next);
@@ -241,6 +245,21 @@ export default function VaultPage() {
       if (list.length > 1) for (const id of list) ids.add(id);
     }
     return ids;
+  }, [items]);
+
+  /** Wave 6 — kelompok item dengan judul sama (untuk panel gabung). */
+  const duplicateGroups = useMemo(() => {
+    const byTitle = new Map<string, VaultItem[]>();
+    for (const it of items) {
+      const key = it.title.trim().toLowerCase();
+      if (!key) continue;
+      const list = byTitle.get(key) ?? [];
+      list.push(it);
+      byTitle.set(key, list);
+    }
+    return [...byTitle.values()]
+      .filter((list) => list.length > 1)
+      .sort((a, b) => a[0].title.localeCompare(b[0].title));
   }, [items]);
 
   const filtered = useMemo(() => {
@@ -411,6 +430,47 @@ export default function VaultPage() {
     }
   }
 
+  /**
+   * Wave 6 — gabung satu kelompok duplikat ke item pertama (primary):
+   * isi field kosong dari item lain, gabungkan tag, dan OR-kan favorite,
+   * lalu hapus item sisanya. Password primary dipertahankan.
+   */
+  async function onMergeGroup(group: VaultItem[]) {
+    const [primary, ...rest] = group;
+    if (!primary || rest.length === 0) return;
+    if (
+      !window.confirm(
+        `Merge ${rest.length} duplicate(s) into "${primary.title}"? The other item(s) will be deleted.`,
+      )
+    )
+      return;
+    setMergeBusy(true);
+    try {
+      const tags = [...new Set(group.flatMap((it) => it.tags))];
+      const payload: VaultItemPayload = {
+        title: primary.title,
+        username: primary.username || rest.find((it) => it.username)?.username || "",
+        password:
+          primary.password || rest.find((it) => it.password)?.password || "",
+        url: primary.url || rest.find((it) => it.url)?.url || "",
+        notes: primary.notes || rest.find((it) => it.notes)?.notes || "",
+        tags,
+        folderId:
+          primary.folderId ?? rest.find((it) => it.folderId)?.folderId ?? null,
+        favorite: group.some((it) => it.favorite),
+        icon: primary.icon ?? rest.find((it) => it.icon)?.icon ?? null,
+      };
+      await update(primary.id, payload);
+      for (const it of rest) await remove(it.id);
+      await load();
+      toast.success(`Merged ${rest.length + 1} items`);
+    } catch {
+      toast.error("Could not merge duplicates");
+    } finally {
+      setMergeBusy(false);
+    }
+  }
+
   /** Aksi sekunder per baris (ikon soup dipindah ke menu "⋯"). */
   function rowMenu(item: VaultItem, shown: string | undefined): MenuItem[] {
     const base: MenuItem[] = [
@@ -507,6 +567,15 @@ export default function VaultPage() {
             onClick={() => setDupesOnly((v) => !v)}
           >
             Duplicates ({duplicateIds.size})
+          </Button>
+        )}
+        {duplicateGroups.length > 0 && (
+          <Button
+            variant="secondary"
+            icon={Combine}
+            onClick={() => setMergeOpen(true)}
+          >
+            Merge duplicates
           </Button>
         )}
         <Tabs
@@ -809,6 +878,74 @@ export default function VaultPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Wave 6 — gabung kelompok item berjudul sama (isi kosong digabung, sisa dihapus). */}
+      <Modal
+        open={mergeOpen}
+        onClose={() => setMergeOpen(false)}
+        title="Merge duplicates"
+        description="Each group is merged into the first item. Empty fields are filled from the others, tags are combined, and the remaining items are deleted."
+      >
+        {duplicateGroups.length === 0 ? (
+          <EmptyState
+            icon={Combine}
+            title="No duplicates"
+            hint="Every item in your vault has a unique title."
+          />
+        ) : (
+          <ul className="space-y-3">
+            {duplicateGroups.map((group) => (
+              <li
+                key={group[0].id}
+                className="rounded-xl border border-line bg-raised p-3"
+              >
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-ink">
+                      {group[0].title}
+                    </p>
+                    <p className="text-[11px] text-muted">
+                      {group.length} items · keep “{group[0].title}”
+                    </p>
+                  </div>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={Combine}
+                    disabled={mergeBusy}
+                    onClick={() => void onMergeGroup(group)}
+                  >
+                    Merge
+                  </Button>
+                </div>
+                <ul className="space-y-1">
+                  {group.map((it, i) => (
+                    <li
+                      key={it.id}
+                      className="flex items-center gap-2 text-xs text-muted"
+                    >
+                      <span
+                        className={cn(
+                          "grid h-4 w-4 shrink-0 place-items-center rounded text-[9px] font-semibold",
+                          i === 0
+                            ? "bg-accent text-accent-fg"
+                            : "bg-line text-muted",
+                        )}
+                      >
+                        {i === 0 ? "K" : "D"}
+                      </span>
+                      <span className="truncate">
+                        {it.username || "no username"}
+                        {it.url ? ` · ${hostnameFromUrl(it.url)}` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        )}
       </Modal>
 
       {/* Wave 6 — riwayat password lama (terbaru dulu) + aksi pulihkan. */}

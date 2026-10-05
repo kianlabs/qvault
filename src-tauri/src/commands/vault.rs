@@ -268,6 +268,12 @@ pub fn delete_vault_item(state: State<'_, AppState>, id: String) -> Result<()> {
             "DELETE FROM vault_items WHERE id = ?1",
             rusqlite::params![id],
         )?;
+        // Wave 6: hapus riwayat password item agar tidak ada sisa blob
+        // password lama setelah item dihapus (privasi).
+        conn.execute(
+            "DELETE FROM password_history WHERE item_id = ?1",
+            rusqlite::params![id],
+        )?;
         log_activity(conn, "vault", "delete", title.as_deref())?;
         Ok(())
     })
