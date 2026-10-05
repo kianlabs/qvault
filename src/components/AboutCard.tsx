@@ -67,7 +67,10 @@ export default function AboutCard() {
       </div>
 
       <div className="space-y-1 text-xs text-muted">
-        <p>100% offline · tanpa cloud · tanpa telemetri</p>
+        <p>Vault lokal · tanpa cloud · tanpa telemetri</p>
+        <p>
+          Cek update otomatis saat dibuka · cek kebocoran opsional (k-anonim)
+        </p>
         <p className="font-mono">Argon2id · AES-256-GCM · SQLite</p>
       </div>
 
