@@ -57,6 +57,7 @@ import {
   parseTags,
 } from "../../lib/utils";
 import { faviconUrl } from "../../lib/favicon";
+import { mergeBlocksTotp } from "../../lib/vault-merge";
 
 const VIEW_KEY = "qvault.vaultView";
 type ViewMode = "grid" | "list";
@@ -441,7 +442,7 @@ export default function VaultPage() {
     const [primary, ...rest] = group;
     if (!primary || rest.length === 0) return;
     // Cegah kehilangan secret 2FA: hanya TOTP primary yang bertahan.
-    if (rest.some((it) => it.hasTotp)) {
+    if (mergeBlocksTotp(group)) {
       toast.error("2FA secret on a duplicate — resolve manually before merging");
       return;
     }
@@ -905,7 +906,7 @@ export default function VaultPage() {
             {duplicateGroups.map((group) => {
               // Secret TOTP hanya selamat bila ada di item primary; item lain
               // yang punya TOTP akan kehilangan secret-nya saat dihapus.
-              const totpLost = group.slice(1).some((it) => it.hasTotp);
+              const totpLost = mergeBlocksTotp(group);
               return (
                 <li
                   key={group[0].id}

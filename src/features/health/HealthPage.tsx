@@ -16,6 +16,7 @@ import {
 import { useVaultStore } from "../../store/useVaultStore";
 import { cn, formatDate, parseDate, passwordStrength } from "../../lib/utils";
 import { breachCounts } from "../../lib/hibp";
+import { breachStatus } from "../../lib/breach-status";
 import { staggerIn, useGsap } from "../../lib/motion";
 import EmptyState from "../../components/EmptyState";
 import {
@@ -188,6 +189,13 @@ export default function HealthPage() {
     [items, breachCountsMap],
   );
 
+  /** Status jujur cek kebocoran (breached/failed/empty/clean) — lihat lib. */
+  const breachState = breachStatus({
+    breached: breachedItems.length,
+    failed: breachFailed,
+    scanned: breachScanned,
+  });
+
   // Entrance motion (presentation only): cascade the summary grid on mount and
   // re-cascade the problem list whenever the active filter (tab) changes.
   const statsRef = useRef<HTMLDivElement>(null);
@@ -284,24 +292,24 @@ export default function HealthPage() {
         <div
           className={cn(
             "rounded-xl border px-4 py-2 text-xs",
-            breachedItems.length > 0
+            breachState === "breached"
               ? "border-danger/30 bg-danger-soft text-danger"
-              : breachFailed > 0
+              : breachState === "failed"
                 ? "border-warn/30 bg-warn-soft text-warn"
-                : breachScanned === 0
+                : breachState === "empty"
                   ? "border-line bg-raised text-muted"
                   : "border-success/30 bg-success-soft text-success",
           )}
         >
-          {breachedItems.length > 0
+          {breachState === "breached"
             ? `${breachedItems.length} password${
                 breachedItems.length === 1 ? "" : "s"
               } found in known breaches — see the “Breached” tab.`
-            : breachFailed > 0
+            : breachState === "failed"
               ? `${breachFailed} of ${breachScanned} password${
                   breachScanned === 1 ? "" : "s"
                 } could not be checked (network). Re-run the check before trusting a clean result.`
-              : breachScanned === 0
+              : breachState === "empty"
                 ? "No stored passwords to check — add passwords to your items first."
                 : "No passwords found in known breaches. Nice work."}
         </div>
@@ -410,11 +418,11 @@ export default function HealthPage() {
                 title="Nothing here"
                 hint={
                   activeDef.key === "breached"
-                    ? breachFailed > 0
+                    ? breachState === "failed"
                       ? `${breachFailed} password${
                           breachFailed === 1 ? "" : "s"
                         } could not be checked — this list is incomplete. Re-run the check.`
-                      : breachScanned === 0
+                      : breachState === "empty"
                         ? "No stored passwords were available to check."
                         : "No passwords were found in known breaches. Nice work."
                     : "No items in this category. Nice work."
