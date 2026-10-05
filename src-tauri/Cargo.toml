@@ -1,6 +1,6 @@
 [package]
 name = "qvault"
-version = "0.1.7"
+version = "0.1.8"
 description = "QVAULT — Local-First Password Vault & Life OS"
 authors = ["Kyan (Ridzkyan)"]
 edition = "2021"
