@@ -57,7 +57,7 @@ import {
   parseTags,
 } from "../../lib/utils";
 import { faviconUrl } from "../../lib/favicon";
-import { mergeBlocksTotp } from "../../lib/vault-merge";
+import { mergeBlocksTotp, mergeNotes } from "../../lib/vault-merge";
 
 const VIEW_KEY = "qvault.vaultView";
 type ViewMode = "grid" | "list";
@@ -448,20 +448,23 @@ export default function VaultPage() {
     }
     if (
       !window.confirm(
-        `Merge ${rest.length} duplicate(s) into "${primary.title}"? The other item(s) will be deleted.`,
+        `Merge ${rest.length} duplicate(s) into "${primary.title}"? Tags and notes are combined; the other item(s) will be deleted.`,
       )
     )
       return;
     setMergeBusy(true);
     try {
       const tags = [...new Set(group.flatMap((it) => it.tags))];
+      // Catatan bersifat multi-nilai: gabungkan semua yang unik & non-kosong
+      // agar catatan pada item non-primary tidak hilang saat item dihapus.
+      const notes = mergeNotes(group);
       const payload: VaultItemPayload = {
         title: primary.title,
         username: primary.username || rest.find((it) => it.username)?.username || "",
         password:
           primary.password || rest.find((it) => it.password)?.password || "",
         url: primary.url || rest.find((it) => it.url)?.url || "",
-        notes: primary.notes || rest.find((it) => it.notes)?.notes || "",
+        notes,
         tags,
         folderId:
           primary.folderId ?? rest.find((it) => it.folderId)?.folderId ?? null,
