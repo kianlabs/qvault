@@ -39,6 +39,7 @@ import {
   type MenuItem,
 } from "../../components/ui";
 import { secureCopy } from "../../lib/clipboard";
+import { brandForHost } from "../../lib/brand-logos";
 import { staggerIn, useGsap } from "../../lib/motion";
 import { useFoldersStore } from "../../store/useFoldersStore";
 import { useSettingsStore } from "../../store/useSettingsStore";
@@ -86,9 +87,9 @@ const EMPTY_FORM: VaultItemPayload = {
 };
 
 /**
- * Avatar item vault: pakai `icon` bila ada, lalu favicon situs, lalu inisial.
- * `onIconError` dipanggil saat <img> gagal → parent menandai URL rusak.
- * Wave 5 — saat `showIcons` false, lewati ikon/favicon: langsung inisial.
+ * Avatar item vault: `icon` kustom → logo brand situs (bundel offline) →
+ * inisial. `onIconError` dipanggil saat <img> gagal → parent menandai rusak.
+ * Saat `showIcons` false, langsung inisial.
  */
 function VaultAvatar({
   item,
@@ -103,8 +104,11 @@ function VaultAvatar({
   showIcons?: boolean;
   onIconError?: () => void;
 }) {
-  const src = !showIcons || broken ? null : item.icon || faviconUrl(item.url);
   const box = size === "lg" ? "h-12 w-12 rounded-2xl" : "h-10 w-10 rounded-xl";
+  const glyph = size === "lg" ? "h-7 w-7" : "h-6 w-6";
+
+  // 1) Ikon kustom dari pengguna (URL/data URL).
+  const src = !showIcons || broken ? null : item.icon || faviconUrl(item.url);
   if (src) {
     return (
       <div
@@ -116,12 +120,38 @@ function VaultAvatar({
         <img
           src={src}
           alt=""
-          className="h-6 w-6 object-contain"
+          className={cn(glyph, "object-contain")}
           onError={onIconError}
         />
       </div>
     );
   }
+
+  // 2) Logo brand situs — glyph dibundel offline, diwarnai sesuai merek di
+  //    atas chip terang agar tetap terlihat di tema gelap maupun terang.
+  if (showIcons) {
+    const brand = brandForHost(hostnameFromUrl(item.url));
+    if (brand) {
+      return (
+        <div
+          className={cn(
+            "grid shrink-0 place-items-center overflow-hidden bg-white ring-1 ring-black/10",
+            box,
+          )}
+        >
+          <svg
+            viewBox={`0 0 ${brand.width} ${brand.height}`}
+            className={glyph}
+            style={{ color: brand.hex }}
+            aria-hidden="true"
+            dangerouslySetInnerHTML={{ __html: brand.body }}
+          />
+        </div>
+      );
+    }
+  }
+
+  // 3) Fallback inisial.
   return (
     <div
       className={cn(
