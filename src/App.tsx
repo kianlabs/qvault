@@ -12,6 +12,7 @@ import Sidebar from "./components/Sidebar";
 import TitleBar from "./components/TitleBar";
 import { ToastProvider } from "./components/Toast";
 import UpdateDialog from "./components/UpdateDialog";
+import { isAutoLockPaused } from "./lib/auto-lock";
 import UnlockScreen from "./features/auth/UnlockScreen";
 import DashboardPage from "./features/dashboard/DashboardPage";
 import VaultPage from "./features/vault/VaultPage";
@@ -46,14 +47,23 @@ function useAutoLock(enabled: boolean, minutes: number) {
 
     const arm = () => {
       if (timer.current) window.clearTimeout(timer.current);
-      timer.current = window.setTimeout(() => void lock(), minutes * 60_000);
+      timer.current = window.setTimeout(() => {
+        // Dialog native (file picker) menahan auto-lock; jangan kunci saat itu.
+        if (isAutoLockPaused()) {
+          arm();
+          return;
+        }
+        void lock();
+      }, minutes * 60_000);
     };
 
     const onVisibilityChange = () => {
+      if (isAutoLockPaused()) return;
       if (document.visibilityState === "hidden") void lock();
     };
 
     const onBlur = () => {
+      if (isAutoLockPaused()) return;
       void lock();
     };
 

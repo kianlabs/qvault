@@ -28,6 +28,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { withAutoLockPaused } from "../../lib/auto-lock";
 import { api } from "../../lib/api";
 import { useSettingsStore } from "../../store/useSettingsStore";
 import { useAuthStore } from "../../store/useAuthStore";
@@ -242,11 +243,13 @@ export default function SettingsPage() {
       toast.error("Enter a backup password first");
       return;
     }
-    const path = await save({
-      title: "Export encrypted backup",
-      defaultPath: `qvault-backup-${today()}.qvlt`,
-      filters: [{ name: "QVAULT backup", extensions: ["qvlt"] }],
-    });
+    const path = await withAutoLockPaused(() =>
+      save({
+        title: "Export encrypted backup",
+        defaultPath: `qvault-backup-${today()}.qvlt`,
+        filters: [{ name: "QVAULT backup", extensions: ["qvlt"] }],
+      }),
+    );
     if (!path) return;
     setDataBusy(true);
     try {
@@ -264,11 +267,13 @@ export default function SettingsPage() {
       toast.error("Enter the backup password first");
       return;
     }
-    const path = await open({
-      title: "Restore from backup",
-      multiple: false,
-      filters: [{ name: "QVAULT backup", extensions: ["qvlt"] }],
-    });
+    const path = await withAutoLockPaused(() =>
+      open({
+        title: "Restore from backup",
+        multiple: false,
+        filters: [{ name: "QVAULT backup", extensions: ["qvlt"] }],
+      }),
+    );
     if (!path) return;
     setDataBusy(true);
     try {
@@ -283,11 +288,13 @@ export default function SettingsPage() {
   }
 
   async function onExportCsv() {
-    const path = await save({
-      title: "Export CSV",
-      defaultPath: `qvault-${csvKind}-${today()}.csv`,
-      filters: [{ name: "CSV", extensions: ["csv"] }],
-    });
+    const path = await withAutoLockPaused(() =>
+      save({
+        title: "Export CSV",
+        defaultPath: `qvault-${csvKind}-${today()}.csv`,
+        filters: [{ name: "CSV", extensions: ["csv"] }],
+      }),
+    );
     if (!path) return;
     setDataBusy(true);
     try {
@@ -301,11 +308,13 @@ export default function SettingsPage() {
   }
 
   async function onImportCsv() {
-    const path = await open({
-      title: "Import CSV",
-      multiple: false,
-      filters: [{ name: "CSV", extensions: ["csv"] }],
-    });
+    const path = await withAutoLockPaused(() =>
+      open({
+        title: "Import CSV",
+        multiple: false,
+        filters: [{ name: "CSV", extensions: ["csv"] }],
+      }),
+    );
     if (!path) return;
     setDataBusy(true);
     try {
@@ -346,11 +355,13 @@ export default function SettingsPage() {
   }
 
   async function onImportBrowser() {
-    const path = await open({
-      title: `Import from ${importKind}`,
-      multiple: false,
-      filters: [{ name: "CSV", extensions: ["csv"] }],
-    });
+    const path = await withAutoLockPaused(() =>
+      open({
+        title: `Import from ${importKind}`,
+        multiple: false,
+        filters: [{ name: "CSV", extensions: ["csv"] }],
+      }),
+    );
     if (!path) return;
     setDataBusy(true);
     try {
