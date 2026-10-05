@@ -288,7 +288,9 @@ export default function HealthPage() {
               ? "border-danger/30 bg-danger-soft text-danger"
               : breachFailed > 0
                 ? "border-warn/30 bg-warn-soft text-warn"
-                : "border-success/30 bg-success-soft text-success",
+                : breachScanned === 0
+                  ? "border-line bg-raised text-muted"
+                  : "border-success/30 bg-success-soft text-success",
           )}
         >
           {breachedItems.length > 0
@@ -299,7 +301,9 @@ export default function HealthPage() {
               ? `${breachFailed} of ${breachScanned} password${
                   breachScanned === 1 ? "" : "s"
                 } could not be checked (network). Re-run the check before trusting a clean result.`
-              : "No passwords found in known breaches. Nice work."}
+              : breachScanned === 0
+                ? "No stored passwords to check — add passwords to your items first."
+                : "No passwords found in known breaches. Nice work."}
         </div>
       )}
 
@@ -410,7 +414,9 @@ export default function HealthPage() {
                       ? `${breachFailed} password${
                           breachFailed === 1 ? "" : "s"
                         } could not be checked — this list is incomplete. Re-run the check.`
-                      : "No passwords were found in known breaches. Nice work."
+                      : breachScanned === 0
+                        ? "No stored passwords were available to check."
+                        : "No passwords were found in known breaches. Nice work."
                     : "No items in this category. Nice work."
                 }
               />
