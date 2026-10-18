@@ -11,6 +11,7 @@
 
 use rusqlite::{Connection, Row};
 use serde_json::{json, Map, Value};
+use sha2::{Digest, Sha256};
 use tauri::State;
 
 use crate::crypto::{decrypt, derive_key, encrypt, new_salt, Key};
@@ -26,6 +27,13 @@ use super::{
 
 /// Prefix format file backup (kontrak A.4). Satu baris teks.
 const BACKUP_PREFIX: &str = "QVLTBK1:";
+
+/// Hitung hex lowercase SHA-256 dari byte slice.
+fn sha256_hex(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    data_encoding::HEXLOWER.encode(&hasher.finalize())
+}
 
 // ---------------------------------------------------------------------------
 // util kecil
@@ -89,6 +97,8 @@ const BACKUP_TABLES: [&str; 8] = [
 ];
 
 /// Backup terenkripsi: seluruh DB → JSON → AES-256-GCM dengan key dari password.
+/// Menghasilkan arsip terenkripsi lokal (.qvault / .json / .qvlt) dengan timestamp
+/// dan checksum integritas SHA-256.
 #[tauri::command]
 pub fn export_backup(state: State<'_, AppState>, path: String, password: String) -> Result<()> {
     export_backup_impl(&state, path, password)
@@ -99,29 +109,68 @@ pub(crate) fn export_backup_impl(state: &AppState, path: String, password: Strin
     // Validasi password.
     crate::commands::security::validate_password(&password)?;
 
-    // Bangun JSON dari semua tabel.
-    let payload = state.db.with(|conn| {
+    let ts = now();
+    // Bangun JSON dari semua tabel dan hitung checksum integritas SHA-256 dari data tabel.
+    let (payload, tables_checksum) = state.db.with(|conn| {
         let mut tables = Map::new();
         for t in BACKUP_TABLES {
             tables.insert(t.to_string(), Value::Array(read_table(conn, t)?));
         }
-        Ok(json!({
+        let tables_val = Value::Object(tables);
+        let tables_bytes = serde_json::to_vec(&tables_val)
+            .map_err(|e| AppError::Msg(format!("gagal serialisasi tabel backup: {e}")))?;
+        let checksum = sha256_hex(&tables_bytes);
+
+        let payload = json!({
             "version": 1,
-            "exportedAt": now(),
-            "tables": Value::Object(tables),
-        }))
+            "exportedAt": ts,
+            "sha256": checksum,
+            "tables": tables_val,
+        });
+        Ok((payload, checksum))
     })?;
 
     let json_bytes = serde_json::to_vec(&payload)
         .map_err(|e| AppError::Msg(format!("gagal serialisasi backup: {e}")))?;
 
-    // Enkripsi dengan key turunan password.
+    // Enkripsi dengan key turunan password (Argon2id + AES-256-GCM).
     let salt = new_salt();
     let key_bytes = derive_key(&password, &salt)?;
     let key = Key(key_bytes);
     let blob = encrypt(&key, &json_bytes)?; // "nonce_b64:ct_b64"
 
-    let contents = format!("{BACKUP_PREFIX}{}:{}", b64_encode(&salt), blob);
+    let (nonce_b64, ct_b64) = blob
+        .split_once(':')
+        .ok_or_else(|| AppError::Msg("format blob enkripsi tidak valid".into()))?;
+
+    // Checksum integritas SHA-256 dari ciphertext (memastikan integritas fisik file).
+    let archive_checksum = sha256_hex(ct_b64.as_bytes());
+
+    let contents = if path.ends_with(".qvlt") {
+        // Format baris QVLTBK1 (kontrak Wave 3 / paritas backward-compat)
+        format!(
+            "{BACKUP_PREFIX}{}:{}:{}:{}",
+            b64_encode(&salt),
+            nonce_b64,
+            ct_b64,
+            archive_checksum
+        )
+    } else {
+        // Format arsip terenkripsi lokal .qvault / .json dengan metadata timestamp dan checksum integritas SHA-256
+        let archive = json!({
+            "format": "qvault-encrypted-backup",
+            "version": 1,
+            "exportedAt": ts,
+            "sha256": archive_checksum,
+            "tablesChecksumSha256": tables_checksum,
+            "salt": b64_encode(&salt),
+            "nonce": nonce_b64,
+            "ciphertext": ct_b64,
+        });
+        serde_json::to_string_pretty(&archive)
+            .map_err(|e| AppError::Msg(format!("gagal membuat format archive backup: {e}")))?
+    };
+
     std::fs::write(&path, contents)?;
     // Backup berisi seluruh DB (kolom *_enc tetap terenkripsi) → batasi izin 0600.
     if let Err(e) = restrict_permissions(&path) {
@@ -134,7 +183,8 @@ pub(crate) fn export_backup_impl(state: &AppState, path: String, password: Strin
     })
 }
 
-/// Restore: baca file, verifikasi password (AEAD), wipe tabel data, insert ulang.
+/// Restore: baca file (.qvault / .json / .qvlt), verifikasi integritas SHA-256,
+/// verifikasi password (AEAD), validasi skema/versi, wipe tabel data, dan insert ulang.
 #[tauri::command]
 pub fn import_backup(state: State<'_, AppState>, path: String, password: String) -> Result<()> {
     import_backup_impl(&state, path, password)
@@ -146,21 +196,86 @@ pub(crate) fn import_backup_impl(state: &AppState, path: String, password: Strin
     crate::commands::security::validate_password(&password)?;
 
     let contents = std::fs::read_to_string(&path)?;
-    let rest = contents
-        .trim()
-        .strip_prefix(BACKUP_PREFIX)
-        .ok_or_else(|| AppError::Msg("file backup tidak valid".into()))?;
+    let trimmed = contents.trim();
 
-    let (salt_b64, blob) = rest
-        .split_once(':')
-        .ok_or_else(|| AppError::Msg("file backup tidak valid".into()))?;
+    let (salt, blob) = if trimmed.starts_with('{') {
+        // Format arsip JSON (.qvault / .json)
+        let archive: Value = serde_json::from_str(trimmed)
+            .map_err(|e| AppError::Msg(format!("file backup JSON tidak valid: {e}")))?;
 
-    let salt = b64_decode(salt_b64)?;
+        let version = archive.get("version").and_then(Value::as_u64);
+        if version != Some(1) {
+            return Err(AppError::Msg("versi backup tidak didukung".into()));
+        }
+
+        let salt_b64 = archive
+            .get("salt")
+            .and_then(Value::as_str)
+            .ok_or_else(|| AppError::Msg("field salt tidak ditemukan pada backup".into()))?;
+        let salt = b64_decode(salt_b64)?;
+
+        let (nonce_b64, ct_b64) = if let (Some(n), Some(c)) = (
+            archive.get("nonce").and_then(Value::as_str),
+            archive.get("ciphertext").and_then(Value::as_str),
+        ) {
+            (n, c)
+        } else if let Some(blob_str) = archive.get("blob").and_then(Value::as_str) {
+            blob_str
+                .split_once(':')
+                .ok_or_else(|| AppError::Msg("field blob backup tidak valid".into()))?
+        } else {
+            return Err(AppError::Msg("data ciphertext backup tidak ditemukan".into()));
+        };
+
+        // Verifikasi checksum integritas SHA-256 pada arsip jika ada
+        if let Some(expected_sha256) = archive.get("sha256").and_then(Value::as_str) {
+            let actual_sha256 = sha256_hex(ct_b64.as_bytes());
+            if expected_sha256 != actual_sha256 {
+                return Err(AppError::Msg(
+                    "integritas backup rusak: checksum sha256 tidak cocok".into(),
+                ));
+            }
+        }
+
+        (salt, format!("{nonce_b64}:{ct_b64}"))
+    } else if let Some(rest) = trimmed.strip_prefix(BACKUP_PREFIX) {
+        // Format baris QVLTBK1:
+        // Format baru: "QVLTBK1:<salt_b64>:<nonce_b64>:<ct_b64>:<sha256>"
+        // Format legacy: "QVLTBK1:<salt_b64>:<nonce_b64>:<ct_b64>"
+        let parts: Vec<&str> = rest.split(':').collect();
+        match parts.len() {
+            4 => {
+                let salt = b64_decode(parts[0])?;
+                let nonce_b64 = parts[1];
+                let ct_b64 = parts[2];
+                let expected_sha256 = parts[3];
+                let actual_sha256 = sha256_hex(ct_b64.as_bytes());
+                if expected_sha256 != actual_sha256 {
+                    return Err(AppError::Msg(
+                        "integritas backup rusak: checksum sha256 tidak cocok".into(),
+                    ));
+                }
+                (salt, format!("{nonce_b64}:{ct_b64}"))
+            }
+            3 => {
+                let salt = b64_decode(parts[0])?;
+                (salt, format!("{}:{}", parts[1], parts[2]))
+            }
+            2 => {
+                let salt = b64_decode(parts[0])?;
+                (salt, parts[1].to_string())
+            }
+            _ => return Err(AppError::Msg("file backup tidak valid".into())),
+        }
+    } else {
+        return Err(AppError::Msg("file backup tidak valid".into()));
+    };
+
     let key_bytes = derive_key(&password, &salt)?;
     let key = Key(key_bytes);
 
     // AEAD: password salah → dekripsi gagal.
-    let plain = decrypt(&key, blob).map_err(|_| AppError::Msg("password backup salah".into()))?;
+    let plain = decrypt(&key, &blob).map_err(|_| AppError::Msg("password backup salah".into()))?;
 
     let root: Value = serde_json::from_slice(&plain)
         .map_err(|e| AppError::Msg(format!("isi backup tidak valid: {e}")))?;
@@ -171,10 +286,28 @@ pub(crate) fn import_backup_impl(state: &AppState, path: String, password: Strin
         return Err(AppError::Msg("versi backup tidak didukung".into()));
     }
 
-    let tables = root
+    let tables_value = root
         .get("tables")
-        .and_then(Value::as_object)
         .ok_or_else(|| AppError::Msg("file backup tidak valid".into()))?;
+    let tables = tables_value
+        .as_object()
+        .ok_or_else(|| AppError::Msg("tabel backup tidak valid".into()))?;
+
+    // Verifikasi checksum integritas data tabel jika ada
+    if let Some(expected_table_hash) = root
+        .get("sha256")
+        .or_else(|| root.get("checksum"))
+        .and_then(Value::as_str)
+    {
+        let tables_bytes = serde_json::to_vec(tables_value)
+            .map_err(|e| AppError::Msg(format!("gagal serialisasi verifikasi tables: {e}")))?;
+        let actual_table_hash = sha256_hex(&tables_bytes);
+        if expected_table_hash != actual_table_hash {
+            return Err(AppError::Msg(
+                "integritas data backup rusak (checksum tabel tidak cocok)".into(),
+            ));
+        }
+    }
 
     state.db.with(|conn| {
         // Satu transaksi: hapus lalu isi ulang. Rollback otomatis bila error.
@@ -1435,5 +1568,87 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("versi backup tidak didukung"));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn qvault_and_json_archive_roundtrip_with_sha256() {
+        let state = test_state();
+        let dek_key = random_key();
+        *state.vault_key.lock().unwrap() = Some(dek_key.clone());
+        seed(&state, &dek_key);
+
+        let path = std::env::temp_dir().join("qvault_test_backup.qvault");
+        let path_s = path.to_string_lossy().to_string();
+
+        // Export → file arsip .qvault (JSON)
+        export_backup_impl(&state, path_s.clone(), "super-safe-password".into()).unwrap();
+        let raw = std::fs::read_to_string(&path).unwrap();
+        assert!(raw.trim().starts_with('{'), "Arsip .qvault harus berformat JSON envelope");
+
+        let parsed: Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(parsed.get("format").and_then(Value::as_str), Some("qvault-encrypted-backup"));
+        assert!(parsed.get("exportedAt").is_some(), "harus memuat timestamp exportedAt");
+        let sha256_val = parsed.get("sha256").and_then(Value::as_str).unwrap();
+        assert_eq!(sha256_val.len(), 64, "checksum SHA-256 harus 64 digit hex");
+        assert!(!raw.contains("s3cr3t"), "Plaintext tidak boleh bocor");
+
+        // Wipe data
+        state
+            .db
+            .with(|conn| {
+                conn.execute_batch("DELETE FROM vault_items; DELETE FROM notes;")?;
+                Ok(())
+            })
+            .unwrap();
+
+        // Restore dari file .qvault
+        import_backup_impl(&state, path_s.clone(), "super-safe-password".into()).unwrap();
+
+        let (n_items, pw_plain) = state
+            .db
+            .with(|conn| {
+                let n: i64 =
+                    conn.query_row("SELECT COUNT(*) FROM vault_items", [], |r| r.get(0))?;
+                let blob: Option<String> = conn.query_row(
+                    "SELECT password_enc FROM vault_items WHERE id='v1'",
+                    [],
+                    |r| r.get(0),
+                )?;
+                Ok((n, dec_str(&dek_key, &blob)))
+            })
+            .unwrap();
+        assert_eq!(n_items, 1);
+        assert_eq!(pw_plain, "s3cr3t");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn qvault_tampered_ciphertext_sha256_fails() {
+        let state = test_state();
+        let dek_key = random_key();
+        *state.vault_key.lock().unwrap() = Some(dek_key.clone());
+        seed(&state, &dek_key);
+
+        let path = std::env::temp_dir().join("qvault_test_tampered.qvault");
+        let path_s = path.to_string_lossy().to_string();
+
+        export_backup_impl(&state, path_s.clone(), "super-safe-password".into()).unwrap();
+        let raw = std::fs::read_to_string(&path).unwrap();
+        let mut parsed: Value = serde_json::from_str(&raw).unwrap();
+
+        // Ubah checksum sha256 agar tidak cocok dengan ciphertext
+        parsed["sha256"] = json!("0000000000000000000000000000000000000000000000000000000000000000");
+        std::fs::write(&path, serde_json::to_string(&parsed).unwrap()).unwrap();
+
+        let err = import_backup_impl(&state, path_s, "super-safe-password".into()).unwrap_err();
+        assert!(
+            err.to_string().contains("checksum sha256 tidak cocok"),
+            "Error harus mengindikasikan kegagalan checksum integritas"
+        );
+
+        let _ = std::fs::remove_file(&path);
     }
 }

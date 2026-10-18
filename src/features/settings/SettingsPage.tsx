@@ -245,16 +245,21 @@ export default function SettingsPage() {
     }
     const path = await withAutoLockPaused(() =>
       save({
-        title: "Export encrypted backup",
-        defaultPath: `qvault-backup-${today()}.qvlt`,
-        filters: [{ name: "QVAULT backup", extensions: ["qvlt"] }],
+        title: "Export Air-gapped Backup",
+        defaultPath: `qvault-backup-${today()}.qvault`,
+        filters: [
+          {
+            name: "QVAULT Air-gapped Archive (*.qvault, *.json, *.qvlt)",
+            extensions: ["qvault", "json", "qvlt"],
+          },
+        ],
       }),
     );
     if (!path) return;
     setDataBusy(true);
     try {
       await api.exportBackup(path, backupPw);
-      toast.success("Backup exported");
+      toast.success("Air-gapped backup exported");
     } catch (err) {
       toast.error(errorMessage(err));
     } finally {
@@ -269,16 +274,21 @@ export default function SettingsPage() {
     }
     const path = await withAutoLockPaused(() =>
       open({
-        title: "Restore from backup",
+        title: "Import Vault Backup",
         multiple: false,
-        filters: [{ name: "QVAULT backup", extensions: ["qvlt"] }],
+        filters: [
+          {
+            name: "QVAULT Air-gapped Archive (*.qvault, *.json, *.qvlt)",
+            extensions: ["qvault", "json", "qvlt"],
+          },
+        ],
       }),
     );
     if (!path) return;
     setDataBusy(true);
     try {
       await api.importBackup(path, restorePw);
-      toast.success("Vault restored");
+      toast.success("Vault backup imported and restored");
       await loadTemplates();
     } catch (err) {
       toast.error(errorMessage(err));
@@ -624,12 +634,12 @@ export default function SettingsPage() {
 
       {/* Data */}
       <Section icon={Database} title="Data">
-        {/* Backup vault */}
-        <div className="space-y-3 rounded-xl border border-line bg-surface p-4">
+        {/* Air-gapped Backup vault */}
+        <div id="air-gapped-backup" className="space-y-3 rounded-xl border border-line bg-surface p-4">
           <div>
-            <p className="text-sm font-semibold text-ink">Backup vault</p>
+            <p className="text-sm font-semibold text-ink">Air-gapped Encrypted Backup</p>
             <p className="text-xs text-muted">
-              Export an encrypted copy of every item, note, task and folder.
+              Export an air-gapped encrypted archive (.qvault / .json) of your entire vault with SHA-256 integrity checksum and timestamp. Encrypted locally with AES-256-GCM — 100% offline, zero cloud reliance.
             </p>
           </div>
           <Field label="Backup password">
@@ -646,16 +656,16 @@ export default function SettingsPage() {
             ) : (
               <Download className="h-4 w-4" />
             )}
-            Export backup
+            Export Air-gapped Backup
           </Button>
         </div>
 
         {/* Restore vault */}
-        <div className="space-y-3 rounded-xl border border-danger/30 bg-danger-soft p-4">
+        <div id="import-vault-backup" className="space-y-3 rounded-xl border border-danger/30 bg-danger-soft p-4">
           <div>
-            <p className="text-sm font-semibold text-ink">Restore vault</p>
+            <p className="text-sm font-semibold text-ink">Import Vault Backup</p>
             <p className="text-xs text-danger">
-              This will REPLACE all current data with the backup.
+              This will REPLACE all current data with the verified air-gapped backup archive.
             </p>
           </div>
           <Field label="Backup password">
@@ -676,7 +686,7 @@ export default function SettingsPage() {
             ) : (
               <Upload className="h-4 w-4" />
             )}
-            Restore from file
+            Import Vault Backup
           </Button>
         </div>
 

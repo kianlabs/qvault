@@ -11,12 +11,14 @@ import {
   Check,
   CheckCircle2,
   ChevronRight,
+  Download,
   KeyRound,
   Lock,
   NotebookPen,
   ShieldCheck,
   TrendingUp,
   Unlock,
+  Upload,
 } from "lucide-react";
 import { useTasksStore } from "../../store/useTasksStore";
 import { useIncomeStore } from "../../store/useIncomeStore";
@@ -31,7 +33,7 @@ import {
   formatRelative,
   initials,
 } from "../../lib/utils";
-import { AreaChart, Badge, Card } from "../../components/ui";
+import { AreaChart, Badge, Button, Card } from "../../components/ui";
 import EmptyState from "../../components/EmptyState";
 import WorldClock from "../../components/WorldClock";
 import { staggerIn, useGsap } from "../../lib/motion";
@@ -349,6 +351,25 @@ export default function DashboardPage() {
                 </li>
               ))}
             </ul>
+
+            <div className="mt-4 flex flex-col gap-2 border-t border-line pt-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={Download}
+                onClick={() => navigate("/settings")}
+              >
+                Export Air-gapped Backup
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={Upload}
+                onClick={() => navigate("/settings")}
+              >
+                Import Vault Backup
+              </Button>
+            </div>
           </Card>
         </aside>
       </div>

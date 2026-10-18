@@ -32,7 +32,11 @@ No cloud, no telemetry — your data never leaves the device.
 
 **Wave 3**
 
-- **Encrypted backup** — export/import an encrypted archive of the whole vault.
+- **Air-gapped Encrypted Backup & Restore** — export and import a zero-knowledge, 100% offline encrypted archive (`.qvault` or `.json`) of your entire vault.
+  - **Zero-Knowledge Mechanism**: Encrypted locally with authenticated **AES-256-GCM** using a dedicated key derived from the user's backup password via **Argon2id** (with a fresh 16-byte cryptographic salt). Master passwords and authentication verifiers are never written to the backup archive.
+  - **Zero Cloud Reliance**: Operates entirely air-gapped without contacting any remote server, third-party cloud, or external API. Ideal for offline cold storage, hardware security keys, or encrypted USB drives.
+  - **Integrity & Tamper Detection**: Embeds an ISO-8601/RFC 3339 UTC timestamp and cryptographic **SHA-256** integrity checksums (verifying both ciphertext archive integrity and decrypted payload table structures) in addition to AEAD authentication tags.
+  - **Atomic Restoration**: Guarantees all-or-nothing database restore in a single ACID transaction with automatic rollback on checksum mismatch, authentication failure, or corrupted records.
 - **CSV import/export** — move credentials in and out as CSV.
 - **Templates** — reusable item templates for fast entry.
 - **World clock** — multi-timezone clock in the top bar.
@@ -51,7 +55,7 @@ No cloud, no telemetry — your data never leaves the device.
 | Layer            | Technology                                              |
 | ---------------- | ------------------------------------------------------- |
 | Desktop shell    | Tauri 2                                                 |
-| Backend          | Rust (stable), `rusqlite`, `argon2`, `aes-gcm`, `hmac`  |
+| Backend          | Rust (stable), `rusqlite`, `argon2`, `aes-gcm`, `sha2`, `hmac` |
 | Frontend         | React 19, TypeScript, React Router, Zustand             |
 | Styling          | Tailwind CSS 4                                          |
 | Motion           | Web Animations API + View Transitions API (native)      |
@@ -65,13 +69,15 @@ No cloud, no telemetry — your data never leaves the device.
 master password ──Argon2id(m=19456, t=2, p=1, salt=16B)──▶ 32-byte master key
 random 32-byte DEK ──AES-256-GCM──▶ wrapped by master key (stored)
 sensitive fields  ──AES-256-GCM──▶ "nonce_b64:ct_b64" (stored)
+backup password ──Argon2id(m=19456, t=2, p=1, salt=16B)──▶ 32-byte backup key ──AES-256-GCM──▶ air-gapped .qvault archive
 ```
 
 - **KDF** — Argon2id with `m=19456` (19 MiB), `t=2`, `p=1`, 16-byte random salt.
-- **Encryption** — AES-256-GCM (authenticated) for every sensitive field.
+- **Encryption** — AES-256-GCM (authenticated) for every sensitive field and air-gapped archive.
 - **Key wrapping** — a random 32-byte data-encryption key (DEK) is wrapped by the
   master key and stored as a verifier + wrapped DEK; the master password is never
   stored.
+- **Air-gapped backup** — zero-knowledge archive export/import with SHA-256 integrity checksum and timestamp; independent backup password; no cloud dependency.
 - **In-memory only** — the DEK lives only while the vault is unlocked; locking
   clears it.
 - **Clipboard safety** — copied secrets are auto-cleared after a configurable delay.
