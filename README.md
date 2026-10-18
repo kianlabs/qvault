@@ -5,151 +5,183 @@
 [![Tauri 2](https://img.shields.io/badge/Tauri-2-24C8DB.svg)](https://tauri.app)
 [![Rust](https://img.shields.io/badge/Rust-stable-dea584.svg)](https://www.rust-lang.org)
 [![React 19](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-Local_Storage-003B57?logo=sqlite&logoColor=white)
+![Tailwind CSS 4](https://img.shields.io/badge/Tailwind_CSS-4-38B2AC?logo=tailwindcss&logoColor=white)
 
-> **Q = Ky.** A private, offline desktop app that keeps passwords, notes, tasks,
-> calendar, and income records in one encrypted local workspace.
+> **Q = Ky.** A sovereign, 100% offline desktop application combining an enterprise-grade encrypted password vault with a complete Life OS: markdown notes, Kanban tasks, financial calendars, and income tracking in one encrypted local workspace.
 
-Built with **Tauri 2 + Rust + React 19 + TypeScript + SQLite**. Encryption at rest
-uses **Argon2id** (key derivation) + **AES-256-GCM** (authenticated encryption).
-No cloud, no telemetry — your data never leaves the device.
+Built with **Tauri 2 + Rust + React 19 + TypeScript + SQLite**. Data at rest is encrypted using **Argon2id** (memory-hard key derivation) and **AES-256-GCM** (authenticated encryption with associated data). Zero cloud dependency, zero telemetry—your secrets never touch a remote server.
 
-## Features
+---
 
-**Core modules**
+## Architecture & Security Model
 
-- **Vault** — encrypted credential store: username/email, password, website, tags,
-  folders, favorites, notes. Grid/list view, copy & reveal.
-- **Notes** — markdown-style notepad with write/preview, folders, favorites, search.
-- **Tasks** — To Do / In Progress / Done, due dates, priority, tags.
-- **Calendar** — week/month/year view of task due dates and income entries.
-- **Income** — source, amount, currency, category, date + activity chart.
-- **Folders & Favorites** — organize credentials and notes; color folders.
-- **Generator** — strong password generator with strength meter.
-- **Activity Log** — created / updated / deleted / backup / reset history.
-- **Settings** — account, appearance (theme, accent, font size), security
-  (auto-lock, recovery code, master password, clipboard safety), data (backup,
-  reset), about.
+```mermaid
+flowchart TD
+    subgraph UI["Desktop Presentation Layer (React 19 + TypeScript + Tailwind 4)"]
+        VaultView["Vault Credentials & 2FA TOTP"]
+        LifeOS["Markdown Notes, Tasks & Financial Calendar"]
+        Palette["Command Palette (Ctrl/Cmd + K)"]
+        HealthScore["Password Health & Security Audit (0-100)"]
+        AutoLockTimer["Auto-Lock Guard (Idle, Blur, Visibility)"]
+    end
 
-**Wave 3**
+    subgraph TauriIPC["Tauri 2 IPC Bridge (Secure Rust FFI)"]
+        IPCCommands["Tauri Command Handlers (invoke)"]
+    end
 
-- **Air-gapped Encrypted Backup & Restore** — export and import a zero-knowledge, 100% offline encrypted archive (`.qvault` or `.json`) of your entire vault.
-  - **Zero-Knowledge Mechanism**: Encrypted locally with authenticated **AES-256-GCM** using a dedicated key derived from the user's backup password via **Argon2id** (with a fresh 16-byte cryptographic salt). Master passwords and authentication verifiers are never written to the backup archive.
-  - **Zero Cloud Reliance**: Operates entirely air-gapped without contacting any remote server, third-party cloud, or external API. Ideal for offline cold storage, hardware security keys, or encrypted USB drives.
-  - **Integrity & Tamper Detection**: Embeds an ISO-8601/RFC 3339 UTC timestamp and cryptographic **SHA-256** integrity checksums (verifying both ciphertext archive integrity and decrypted payload table structures) in addition to AEAD authentication tags.
-  - **Atomic Restoration**: Guarantees all-or-nothing database restore in a single ACID transaction with automatic rollback on checksum mismatch, authentication failure, or corrupted records.
-- **CSV import/export** — move credentials in and out as CSV.
-- **Templates** — reusable item templates for fast entry.
-- **World clock** — multi-timezone clock in the top bar.
-- **Markdown preview** — live-rendered markdown for notes.
+    subgraph RustCore["Rust Security & Crypto Core"]
+        ArgonEngine["Argon2id KDF Engine (m=19456, t=2, p=1)"]
+        AESEngine["AES-256-GCM AEAD Authenticated Cipher"]
+        DEKMemory["Ephemeral In-Memory DEK (Zeroized on Lock)"]
+        SHAEngine["SHA-256 Cryptographic Checksum Engine"]
+        BackupManager["Air-Gapped Encrypted Backup & Restore"]
+    end
 
-**Wave 4**
+    subgraph LocalStorage["Local Offline Storage (Zero Cloud)"]
+        SQLiteDB[("Encrypted Local SQLite Database")]
+        ArchiveFiles["Air-Gapped .qvault Backup Archives"]
+    end
 
-- **Password health** — a 0–100 health score with weak / reused / stale /
-  missing-password / no-2FA breakdowns and one-click jump to fix.
-- **Command palette** — `Ctrl/Cmd + K` to search and jump across every module.
-- **2FA (TOTP)** — RFC 6238 one-time codes stored encrypted, with live countdown.
-- **Backup** — encrypted DB snapshots (`VACUUM INTO`), on demand plus once every 24 hours while the app is running; keeps the last 5.
+    VaultView --> IPCCommands
+    LifeOS --> IPCCommands
+    Palette --> IPCCommands
+    HealthScore --> IPCCommands
+    AutoLockTimer -->|Trigger Lock & Clear DEK| IPCCommands
 
-## Tech stack
+    IPCCommands --> ArgonEngine
+    IPCCommands --> AESEngine
+    IPCCommands --> BackupManager
 
-| Layer            | Technology                                              |
-| ---------------- | ------------------------------------------------------- |
-| Desktop shell    | Tauri 2                                                 |
-| Backend          | Rust (stable), `rusqlite`, `argon2`, `aes-gcm`, `sha2`, `hmac` |
-| Frontend         | React 19, TypeScript, React Router, Zustand             |
-| Styling          | Tailwind CSS 4                                          |
-| Motion           | Web Animations API + View Transitions API (native)      |
-| Icons / charts   | lucide-react, hand-rolled CSS/Tailwind charts           |
-| Storage          | SQLite (local file)                                     |
-| Build / tooling  | Vite, Bun, Cargo                                        |
+    ArgonEngine -->|Derives Master Key & Backup Key| DEKMemory
+    DEKMemory --> AESEngine
+    AESEngine --> SQLiteDB
+    BackupManager --> SHAEngine
+    BackupManager --> AESEngine
+    BackupManager --> ArchiveFiles
+```
 
-## Security model
+### Cryptographic Key Hierarchy
 
 ```
 master password ──Argon2id(m=19456, t=2, p=1, salt=16B)──▶ 32-byte master key
 random 32-byte DEK ──AES-256-GCM──▶ wrapped by master key (stored)
-sensitive fields  ──AES-256-GCM──▶ "nonce_b64:ct_b64" (stored)
+sensitive fields  ──AES-256-GCM──▶ "nonce_b64:ct_b64" (stored in SQLite)
 backup password ──Argon2id(m=19456, t=2, p=1, salt=16B)──▶ 32-byte backup key ──AES-256-GCM──▶ air-gapped .qvault archive
 ```
 
-- **KDF** — Argon2id with `m=19456` (19 MiB), `t=2`, `p=1`, 16-byte random salt.
-- **Encryption** — AES-256-GCM (authenticated) for every sensitive field and air-gapped archive.
-- **Key wrapping** — a random 32-byte data-encryption key (DEK) is wrapped by the
-  master key and stored as a verifier + wrapped DEK; the master password is never
-  stored.
-- **Air-gapped backup** — zero-knowledge archive export/import with SHA-256 integrity checksum and timestamp; independent backup password; no cloud dependency.
-- **In-memory only** — the DEK lives only while the vault is unlocked; locking
-  clears it.
-- **Clipboard safety** — copied secrets are auto-cleared after a configurable delay.
-- **Offline** — no network calls, no telemetry; the SQLite file never leaves the device.
+---
 
-## Requirements
+## Key Highlights & Featured Innovations
 
-- Rust (stable) + Cargo
-- Node 20+ and Bun (or npm)
-- Linux: `webkit2gtk-4.1`, `gtk3`, `libsoup-3.0` (dev packages)
-- Tauri CLI v2 (`@tauri-apps/cli` is a dev dependency; use `bun run tauri`)
+- 🔒 **Context-Aware Auto-Lock & Idle Detection**: Proactively locks the vault upon configurable user inactivity or immediately when the window loses focus / minimizes (`window blur` and `document visibilitychange` listeners). Intelligently incorporates safe pause locks (`withAutoLockPaused`) when native OS file pickers or confirmation dialogs are open, preventing premature vault locking during backups.
+- 🛡️ **Air-Gapped Encrypted Backup & Integrity Checksums**: Export and import complete zero-knowledge `.qvault` encrypted archives. Derived via Argon2id with fresh salts and authenticated with AES-256-GCM, reinforced by **SHA-256 cryptographic integrity checksums** that detect corrupted or tampered records prior to execution. Restoration executes inside an ACID SQLite transaction with instant rollback on checksum mismatch.
+- 🩺 **Password Health & Vulnerability Audit**: Built-in security analyzer computing a real-time 0–100 vault health score. Flags weak passwords, reused credentials, expired accounts, missing secrets, and items missing two-factor authentication, with 1-click navigation to resolve issues.
+- ⏰ **Integrated 2FA Authenticator (RFC 6238 TOTP)**: Generates standard 6-digit one-time passcodes with dynamic animated countdown rings. TOTP secrets are encrypted at rest alongside credentials, removing the need for external mobile authenticators.
+- ⚡ **Universal Command Palette (`Ctrl/Cmd + K`)**: Keyboard-driven navigation across every feature. Instant full-text fuzzy search across credentials, markdown notes, tasks, financial income records, and app settings.
+- 📋 **Zero-Trace Clipboard Wiper**: Secrets copied to the operating system clipboard are automatically sanitized and wiped after a configurable timeout (default 30 seconds).
+- 🗃️ **Integrated Life OS**: Goes beyond password management to provide encrypted markdown notes with live split preview, Kanban task tracking with deadlines, financial income stream analytics, and multi-timezone world clocks.
 
-## Build & run
+---
+
+## Tech Stack Breakdown
+
+| Layer | Technology | Details |
+|---|---|---|
+| **Desktop Shell** | [Tauri 2](https://tauri.app/) | Secure Rust-to-Webview bridge, minimal memory footprint |
+| **Backend / Crypto** | Rust (Stable) | `rusqlite`, `argon2`, `aes-gcm`, `sha2`, `hmac` |
+| **Frontend Framework** | [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) | Strict type-safety, React Router, [Zustand](https://zustand-demo.pmnd.rs/) state |
+| **Styling & Theme** | [Tailwind CSS 4](https://tailwindcss.com/) | Custom CSS tokens, fluid typography, dark aesthetic |
+| **Native Motion** | Web Animations & View Transitions API | Hardware-accelerated fluid view switching without heavy animation libraries |
+| **Local Database** | [SQLite](https://www.sqlite.org/) | Single-file local storage, WAL mode, ACID transactions |
+| **Package / Build Tool**| [Bun](https://bun.sh/) & [Cargo](https://doc.rust-lang.org/cargo/) | Lightning-fast JS bundle and native compilation |
+
+---
+
+## Quickstart & Local Development
+
+### 1. Prerequisites
+- **Rust (Stable)**: Install via `rustup` (`rustc --version >= 1.78`)
+- **Node.js 20+** and **[Bun](https://bun.sh/)** (or `npm`)
+- **Linux Dev Dependencies** (Ubuntu/Debian):
+  ```bash
+  sudo apt-get update && sudo apt-get install -y \
+    libwebkit2gtk-4.1-dev \
+    build-essential \
+    curl \
+    wget \
+    file \
+    libxdo-dev \
+    libssl-dev \
+    libayatana-appindicator3-dev \
+    librsvg2-dev
+  ```
+
+### 2. Setup & Launching the Desktop Application
 
 ```bash
-# 1. install JS dependencies
+# Clone repository
+git clone https://github.com/kianlabs/qvault.git
+cd qvault
+
+# 1. Install frontend dependencies
 bun install
 
-# 2. run the desktop app in dev (Vite + Rust, hot reload)
+# 2. Run in desktop development mode (Vite HMR + Rust Backend)
 bun run tauri dev
-
-# 3. production bundle → src-tauri/target/release/bundle
-bun run tauri build
 ```
 
-Frontend-only build (no Rust): `bun run build`.
-
-## Tests
+### 3. Production Compilation
 
 ```bash
-# backend unit tests (crypto round-trip, etc.)
-cd src-tauri && cargo test
+# Compile optimized release binaries and native desktop installers (.deb / .AppImage)
+bun run tauri build
+```
+Output bundles are created in `src-tauri/target/release/bundle/`.
 
-# frontend typecheck
+---
+
+## Testing & Verification Suite
+
+Execute the dual-layer automated verification suite:
+
+```bash
+# 1. Backend Rust crypto unit tests (Argon2id, AES-256-GCM roundtrip, SQLite migrations)
+cd src-tauri && cargo test && cd ..
+
+# 2. Frontend TypeScript typechecking
 bunx tsc --noEmit
+
+# 3. Headless View Transition & motion benchmark harness
+python3 tools/harness.py
 ```
 
-CI (GitHub Actions) runs the typecheck + build for the frontend and
-`cargo check` + `cargo test` for the backend on every push and pull request to
-`main`.
+CI (GitHub Actions via `.github/workflows/ci.yml`) automatically validates frontend typechecking and executes `cargo test` on every push and pull request to `main`.
 
-## Project layout
+---
+
+## Repository Directory Structure
 
 ```
-src-tauri/                 # Rust backend
-  src/
-    crypto/                # Argon2id KDF + AES-256-GCM cipher
-    db/                    # SQLite open + schema
-    commands/              # Tauri commands (security, vault, notes, ...)
-    models.rs  state.rs  error.rs
-  icons/                   # app icons (source.svg + generated sets)
-src/                       # React frontend
-  lib/       (types, api, utils, markdown, favicon, motion, accents)
-  store/     (zustand stores)
-  components/(Sidebar, Topbar, Modal, Toast, ...)
-  features/  (dashboard, vault, notes, tasks, calendar, income, folders,
-              favorites, generator, health, activity, settings, auth)
-tools/                     # headless test harness (Playwright + WebKitGTK)
-  qvmock.py           # mock Tauri IPC so the UI runs without the Rust backend
-  harness.py          # scroll-jank + View Transition benchmark
-  webkit_vt_test.py   # verify View Transitions on the real Tauri webview engine
-  check_anims.py      # count lingering animations after idle (must be 0)
-  capture_vt.py       # capture circular-reveal frames
-SPEC.md / FINAL-CONTRACT.md / WAVE3-CONTRACT.md / WAVE4-CONTRACT.md
-QVAULT-MOTION-CONTRACT.md / KEEPR-PARITY-CONTRACT.md
-                           # frozen interface contracts used to build this
+qvault/
+├── src-tauri/                 # Rust desktop core
+│   ├── src/
+│   │   ├── crypto/            # Argon2id KDF + AES-256-GCM AEAD cipher
+│   │   ├── db/                # SQLite connection, WAL mode & migrations
+│   │   ├── commands/          # Tauri command handlers (security, vault, backup)
+│   │   ├── models.rs          # Rust data structures & serialization
+│   │   └── state.rs           # In-memory ephemeral DEK lifecycle
+├── src/                       # React 19 presentation layer
+│   ├── lib/                   # Crypto utils, auto-lock controller, motion tokens
+│   ├── store/                 # Zustand state stores
+│   ├── components/            # Sidebar, Topbar, Modals, Toasts, Form controls
+│   └── features/              # Vault, Notes, Tasks, Calendar, Income, Health, Settings
+└── tools/                     # Headless WebKitGTK animation & scroll-jank test harness
 ```
+
+---
 
 ## License
 
-[MIT](./LICENSE) © 2025 Ridzkyan Buti Pratama (Kyan).
-
-## Author
-
-**Kyan** (Ridzkyan). *The **Q** stands for **Ky**.*
+This software is released under the [MIT License](./LICENSE) © 2025–2026 Ridzkyan Buti Pratama (Kyan).
