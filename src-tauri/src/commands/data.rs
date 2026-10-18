@@ -224,7 +224,9 @@ pub(crate) fn import_backup_impl(state: &AppState, path: String, password: Strin
                 .split_once(':')
                 .ok_or_else(|| AppError::Msg("field blob backup tidak valid".into()))?
         } else {
-            return Err(AppError::Msg("data ciphertext backup tidak ditemukan".into()));
+            return Err(AppError::Msg(
+                "data ciphertext backup tidak ditemukan".into(),
+            ));
         };
 
         // Verifikasi checksum integritas SHA-256 pada arsip jika ada
@@ -1585,11 +1587,20 @@ mod tests {
         // Export → file arsip .qvault (JSON)
         export_backup_impl(&state, path_s.clone(), "super-safe-password".into()).unwrap();
         let raw = std::fs::read_to_string(&path).unwrap();
-        assert!(raw.trim().starts_with('{'), "Arsip .qvault harus berformat JSON envelope");
+        assert!(
+            raw.trim().starts_with('{'),
+            "Arsip .qvault harus berformat JSON envelope"
+        );
 
         let parsed: Value = serde_json::from_str(&raw).unwrap();
-        assert_eq!(parsed.get("format").and_then(Value::as_str), Some("qvault-encrypted-backup"));
-        assert!(parsed.get("exportedAt").is_some(), "harus memuat timestamp exportedAt");
+        assert_eq!(
+            parsed.get("format").and_then(Value::as_str),
+            Some("qvault-encrypted-backup")
+        );
+        assert!(
+            parsed.get("exportedAt").is_some(),
+            "harus memuat timestamp exportedAt"
+        );
         let sha256_val = parsed.get("sha256").and_then(Value::as_str).unwrap();
         assert_eq!(sha256_val.len(), 64, "checksum SHA-256 harus 64 digit hex");
         assert!(!raw.contains("s3cr3t"), "Plaintext tidak boleh bocor");
@@ -1640,7 +1651,8 @@ mod tests {
         let mut parsed: Value = serde_json::from_str(&raw).unwrap();
 
         // Ubah checksum sha256 agar tidak cocok dengan ciphertext
-        parsed["sha256"] = json!("0000000000000000000000000000000000000000000000000000000000000000");
+        parsed["sha256"] =
+            json!("0000000000000000000000000000000000000000000000000000000000000000");
         std::fs::write(&path, serde_json::to_string(&parsed).unwrap()).unwrap();
 
         let err = import_backup_impl(&state, path_s, "super-safe-password".into()).unwrap_err();
